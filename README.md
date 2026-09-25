@@ -1,32 +1,80 @@
-# React + TypeScript + Vite
+# PDM Viewer
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Visor web para abrir archivos PowerDesigner `.pdm` y explorar el esquema de datos en una vista tipo diagrama entidad-relación.
 
-Currently, two official plugins are available:
+## Características
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- carga de archivos `.pdm` y `.xml`
+- visualización de tablas, columnas, claves primarias, relaciones e índices
+- vista de diagrama con nodos tipo entidad
+- panel lateral con listados y búsqueda
+- detalle de tabla con metadatos y SQL DDL
+- generación de SQL compatible con Oracle
+- funcionamiento totalmente en cliente, sin backend
 
-## React Compiler
+## Requisitos
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Node.js 18+
+- npm
 
-## Expanding the Oxlint configuration
+## Instalación
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Ejecutar en desarrollo
+
+```bash
+npm run dev
+```
+
+Luego abre la URL que muestre Vite, normalmente:
+
+```bash
+http://localhost:5173
+```
+
+## Compilar para producción
+
+```bash
+npm run build
+```
+
+Para previsualizar la versión compilada:
+
+```bash
+npm run preview
+```
+
+## Uso
+
+1. Inicia la aplicación con `npm run dev`.
+2. En la pantalla principal, arrastra y suelta un archivo `.pdm` o pulsa para seleccionar uno.
+3. El visor cargará el modelo y mostrará:
+   - el árbol de tablas a la izquierda
+   - el diagrama ER en el centro
+   - el detalle de la tabla seleccionada a la derecha
+4. Puedes cambiar entre las vistas de `Detalles`, `SQL` y `Modelo`.
+5. Si quieres copiar el DDL generado, usa el botón `Copiar SQL`.
+
+## Estructura del proyecto
+
+```bash
+src/
+  components/
+  model/
+  parser/
+  state/
+  utils/
+  App.tsx
+  App.css
+```
+
+## Archivos de ejemplo
+
+La carpeta `examples/` incluye un archivo `.pdm` de ejemplo para probar la aplicación sin depender de un modelo externo.
+
+## Nota
+
+Este proyecto está pensado para visualizar y analizar modelos PowerDesigner en navegador, no para editarlos desde el cliente.
