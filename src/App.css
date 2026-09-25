@@ -784,6 +784,15 @@
   border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
+.ai-control--offline {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.ai-control--offline .ai-control__note {
+  margin-bottom: 0;
+}
+
 .ai-control__switch {
   display: flex;
   align-items: center;

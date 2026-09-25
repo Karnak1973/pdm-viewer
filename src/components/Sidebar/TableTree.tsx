@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useSemanticSearch } from '../../hooks/useSemanticSearch';
-import { EXTERNAL_AI_HOST } from '../../ml/preferences';
+import { EXTERNAL_AI_HOST } from '../../ml/buildConfig';
 import { useModelStore } from '../../state/modelStore';
 
 type SearchModeToggle = 'text' | 'semantic';
@@ -67,7 +67,15 @@ export function TableTree() {
         </button>
       </div>
 
-      {mode === 'semantic' ? (
+      {mode === 'semantic' && !semantic.externalAiAvailable ? (
+        <div className="ai-control ai-control--offline">
+          <span className="semantic-status__pill local">Modo sin conexión</span>
+          <p className="ai-control__note">
+            Esta compilación tiene la IA externa deshabilitada: el código de red no está
+            incluido. La búsqueda semántica usa el motor local y funciona sin Internet.
+          </p>
+        </div>
+      ) : mode === 'semantic' ? (
         <div className="ai-control">
           <label className="ai-control__switch">
             <input

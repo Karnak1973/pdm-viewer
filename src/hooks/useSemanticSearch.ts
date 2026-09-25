@@ -7,7 +7,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Model } from '../model/types';
-import { resetNeural } from '../ml/neural';
+import { EXTERNAL_AI_ENABLED } from '../ml/buildConfig';
+import { resetNeural } from '@neural';
 import { readExternalAiPreference, writeExternalAiPreference } from '../ml/preferences';
 import { createSchemaIndex, type SearchMode, type SemanticResult } from '../ml/schemaIndex';
 
@@ -17,6 +18,8 @@ export interface SemanticSearchState {
   results: SemanticResult[] | null;
   scoreFor: (tableId: string) => number | undefined;
   isSemantic: boolean;
+  /** `false` cuando esta compilación no admite IA externa (build offline). */
+  externalAiAvailable: boolean;
   /** Indica si el usuario ha autorizado el uso de IA externa (persistente). */
   externalAllowed: boolean;
   /** Cambia la autorización; al revocarla se libera el motor y no se vuelve a usar. */
@@ -97,7 +100,9 @@ export function useSemanticSearch(
   );
 
   const loadNeural = useCallback(async () => {
-    // Doble barrera: ni siquiera se intenta la descarga sin autorización.
+    // Triple barrera: compilación sin IA, falta de autorización o carga en curso.
+    // Ninguna de ellas llega siquiera a intentar la descarga del modelo.
+    if (!EXTERNAL_AI_ENABLED) return;
     if (!externalAllowed) return;
     if (mode === 'neural' || mode === 'loading') return;
 
@@ -126,6 +131,7 @@ export function useSemanticSearch(
     results,
     scoreFor,
     isSemantic: enabled && results !== null,
+    externalAiAvailable: EXTERNAL_AI_ENABLED,
     externalAllowed,
     setExternalAllowed,
     loadNeural,

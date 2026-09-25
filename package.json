@@ -6,8 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:offline": "tsc -b && vite build --mode offline --outDir dist-offline",
+    "preview": "vite preview",
+    "preview:offline": "vite preview --outDir dist-offline",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "test": "vitest run"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",

@@ -12,9 +12,6 @@
 
 export const EXTERNAL_AI_STORAGE_KEY = 'pdm-viewer:external-ai';
 
-/** Dominio contactado únicamente al descargar el modelo, y solo si se autoriza. */
-export const EXTERNAL_AI_HOST = 'huggingface.co';
-
 export type ExternalAiAllowed = boolean;
 
 function storage(): Storage | null {

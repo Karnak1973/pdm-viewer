@@ -8,16 +8,11 @@
  */
 
 import { normalizeVector } from './vectorizer';
-import { EXTERNAL_AI_HOST } from './preferences';
+import { EXTERNAL_AI_ENABLED, EXTERNAL_AI_HOST } from './buildConfig';
+import { DEFAULT_MODEL_ID, type EmbeddingProgress, type EmbeddingReporter } from './neuralContract';
 
-/** Modelo multilingüe-ligero: rápido, ~23 MB cuantizado y buen rendimiento en nombres. */
-export const DEFAULT_MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
-
-export interface EmbeddingProgress {
-  stage: 'loading' | 'ready' | 'error';
-  message: string;
-  progress?: number;
-}
+export { DEFAULT_MODEL_ID };
+export type { EmbeddingProgress };
 
 interface TensorLike {
   tolist: () => number[][] | number[];
@@ -40,8 +35,15 @@ let extractorPromise: Promise<FeatureExtractor> | null = null;
  *
  * `env.allowLocalModels = false` evita peticiones a rutas locales inexistentes.
  */
-async function loadExtractor(onProgress?: (progress: EmbeddingProgress) => void): Promise<FeatureExtractor> {
+async function loadExtractor(onProgress?: EmbeddingReporter): Promise<FeatureExtractor> {
   if (extractorPromise) return extractorPromise;
+
+  // Defensa en profundidad: en el build offline este módulo ni siquiera forma
+  // parte del bundle (se sustituye por `neural.offline.ts`), pero si alguien
+  // reutilizara este archivo en otro contexto, la comprobación sigue ahí.
+  if (!EXTERNAL_AI_ENABLED) {
+    throw new Error('La IA externa está deshabilitada en esta compilación.');
+  }
 
   extractorPromise = (async () => {
     onProgress?.({ stage: 'loading', message: `Descargando modelo desde ${EXTERNAL_AI_HOST}...` });
@@ -87,7 +89,7 @@ export function resetNeural(): void {
  */
 export async function embedTexts(
   texts: string[],
-  onProgress?: (progress: EmbeddingProgress) => void,
+  onProgress?: EmbeddingReporter,
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
@@ -106,7 +108,7 @@ export async function embedTexts(
   return rows.map((row) => normalizeVector(row));
 }
 
-/** Prefijo de texto que describe una tabla; se usa tanto en el motor local como en el neuronal. */
-export function preloadModel(onProgress?: (progress: EmbeddingProgress) => void): Promise<void> {
+/** Fuerza la descarga del modelo sin calcular vectores, útil para precalentar. */
+export function preloadModel(onProgress?: EmbeddingReporter): Promise<void> {
   return loadExtractor(onProgress).then(() => undefined);
 }

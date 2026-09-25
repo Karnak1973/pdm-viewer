@@ -8,6 +8,13 @@
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 
+    /* El motor de embeddings se resuelve por alias en Vite; aquí se tipa
+       siempre contra la implementación real, que es la que define la API.
+       Los `paths` se resuelven relativos a este archivo, sin `baseUrl`. */
+    "paths": {
+      "@neural": ["./src/ml/neural.ts"]
+    },
+
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,

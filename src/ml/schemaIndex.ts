@@ -11,7 +11,8 @@
 
 import type { Model, Table } from '../model/types';
 import { readCache, writeCache } from './cache';
-import { embedTexts, type EmbeddingProgress } from './neural';
+import { embedTexts } from '@neural';
+import type { EmbeddingProgress } from './neuralContract';
 import { LexicalIndex, cosineSimilarity, type SearchDocument } from './vectorizer';
 
 const CACHE_VERSION = 'v1';
