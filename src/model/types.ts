@@ -7,6 +7,7 @@ export interface Model {
 
 export interface Table {
   id: string;
+  pdId?: string;
   code: string;
   name: string;
   comment?: string;
@@ -19,6 +20,7 @@ export interface Table {
 
 export interface Column {
   id: string;
+  pdId?: string;
   code: string;
   name: string;
   dataType: string;
@@ -32,6 +34,7 @@ export interface Column {
 
 export interface Reference {
   id: string;
+  pdId?: string;
   name: string;
   parentTable: string;
   childTable: string;
@@ -43,6 +46,7 @@ export interface Reference {
 
 export interface Key {
   id: string;
+  pdId?: string;
   name: string;
   columns: string[];
   isPrimary: boolean;
@@ -50,6 +54,7 @@ export interface Key {
 
 export interface Index {
   id: string;
+  pdId?: string;
   name: string;
   columns: string[];
   unique: boolean;

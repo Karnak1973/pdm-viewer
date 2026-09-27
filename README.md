@@ -10,6 +10,7 @@ Visor web para abrir archivos PowerDesigner `.pdm` y explorar el esquema de dato
 - panel lateral con listados y búsqueda
 - detalle de tabla con metadatos y SQL DDL
 - generación de SQL compatible con Oracle
+- edición de metadatos (nombres, tipos, longitud, NOT NULL, comentarios) con descarga del `.pdm`
 - funcionamiento totalmente en cliente, sin backend
 
 ## Requisitos
@@ -162,4 +163,4 @@ La carpeta `examples/` incluye un archivo `.pdm` de ejemplo para probar la aplic
 
 ## Nota
 
-Este proyecto está pensado para visualizar y analizar modelos PowerDesigner en navegador, no para editarlos desde el cliente.
+Este proyecto está pensado para visualizar y analizar modelos PowerDesigner en navegador. La edición se limita a los metadatos de tablas y columnas: se parchea el XML original conservando intacta su estructura y se descarga un `.pdm` nuevo. No se alteran objetos del modelo, diagramas ni opciones de generación.

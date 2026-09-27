@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useModelStore } from '../../state/modelStore';
 import { useAnnotationStore } from '../../state/annotationStore';
 import { AnnotationEditor } from '../Annotations/AnnotationEditor';
+import { TableEditor } from './TableEditor';
 import { generateModelSql, generateTableSql } from '../../utils/sqlGenerator';
 
 function formatSqlForDisplay(sql: string) {
@@ -17,9 +18,10 @@ function formatSqlForDisplay(sql: string) {
 }
 
 export function DetailPanel() {
-  const { model, selectedTableId, setView } = useModelStore();
+  const { model, selectedTableId, setView, sourceXml } = useModelStore();
   const [viewMode, setViewMode] = useState<'details' | 'sql' | 'model' | 'notes'>('details');
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [editing, setEditing] = useState(false);
   const annotationCount = useAnnotationStore((state) =>
     state.annotations.filter((a) => a.tableId === selectedTableId).length,
   );
@@ -89,6 +91,15 @@ export function DetailPanel() {
           </div>
           <button type="button" className="copy-button" onClick={handleCopy}>
             {copyState === 'copied' ? 'Copiado' : copyState === 'error' ? 'Error' : 'Copiar SQL'}
+          </button>
+          <button
+            type="button"
+            className="detail-panel__edit-button"
+            onClick={() => setEditing(true)}
+            disabled={!sourceXml}
+            title={sourceXml ? 'Editar los metadatos de la tabla' : 'Carga un .pdm para poder editar'}
+          >
+            Editar
           </button>
           <span className="badge">{selectedTable.code}</span>
         </div>
@@ -229,6 +240,8 @@ export function DetailPanel() {
           </div>
         </div>
       )}
+
+      {editing ? <TableEditor table={selectedTable} onClose={() => setEditing(false)} /> : null}
     </section>
   );
 }

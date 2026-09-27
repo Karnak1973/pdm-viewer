@@ -59,6 +59,41 @@ function toKeyId(prefix: string, index: number): string {
   return `${prefix}-${index}`;
 }
 
+const CONSTRAINT_LABELS = ['None', 'Restrict', 'Cascade', 'Set Null', 'Set Default'];
+
+function readPdId(node: Record<string, unknown> | undefined): string | undefined {
+  const value = node ? readValue(node, ['Id', 'id']) : undefined;
+  return value == null ? undefined : String(value);
+}
+
+function readConstraint(source: Record<string, unknown> | undefined, names: string[]): string | undefined {
+  const raw = readValue(source, names);
+  if (raw == null) return undefined;
+  const text = String(raw).trim();
+  if (/^\d+$/.test(text)) {
+    const index = Number(text);
+    if (index >= 0 && index < CONSTRAINT_LABELS.length) return CONSTRAINT_LABELS[index];
+  }
+  return text;
+}
+
+function parseRect(value: string): { x: number; y: number; w: number; h: number } | undefined {
+  const numbers = value.match(/-?\d+/g);
+  if (!numbers || numbers.length < 4) return undefined;
+  const [x1, y1, x2, y2] = numbers.map(Number);
+  if (!Number.isFinite(x1) || !Number.isFinite(y1) || !Number.isFinite(x2) || !Number.isFinite(y2)) {
+    return undefined;
+  }
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+}
+
 function findByName(root: unknown, names: string[]): unknown {
   if (root == null || typeof root !== 'object') return undefined;
 
@@ -117,12 +152,17 @@ function normalizeColumn(columnNode: Record<string, unknown>, index: number): Co
   const type = String(readValue(columnNode, ['DataType', 'dataType', 'Type', 'type']) ?? 'unknown');
   const length = Number(readValue(columnNode, ['Length', 'length'])) || undefined;
   const precision = Number(readValue(columnNode, ['Precision', 'precision'])) || undefined;
-  const mandatory = toBoolean(readValue(columnNode, ['Mandatory', 'mandatory', 'NotNull', 'notNull']));
-  const identity = toBoolean(readValue(columnNode, ['Identity', 'identity', 'IsIdentity', 'isIdentity']));
+  const mandatory = toBoolean(
+    readValue(columnNode, ['Column.Mandatory', 'Mandatory', 'mandatory', 'NotNull', 'notNull']),
+  );
+  const identity = toBoolean(
+    readValue(columnNode, ['Column.Identity', 'Identity', 'identity', 'IsIdentity', 'isIdentity']),
+  );
   const defaultValue = readValue(columnNode, ['DefaultValue', 'defaultValue', 'Default', 'default']);
 
   return {
     id: toKeyId('column', index),
+    pdId: readPdId(columnNode),
     code,
     name,
     dataType: type,
@@ -135,7 +175,7 @@ function normalizeColumn(columnNode: Record<string, unknown>, index: number): Co
   };
 }
 
-function resolveColumnIds(columns: Column[], values: string[]): string[] {
+function resolveColumnIds(columns: Column[], values: string[], byPdId?: Map<string, string>): string[] {
   const byCode = new Map<string, string>();
   const byName = new Map<string, string>();
 
@@ -149,67 +189,139 @@ function resolveColumnIds(columns: Column[], values: string[]): string[] {
       const entry = String(value).trim();
       if (!entry) return undefined;
       const normalized = entry.toLowerCase();
-      return byCode.get(normalized) ?? byName.get(normalized) ?? entry;
+      return (
+        byPdId?.get(normalized) ??
+        byCode.get(normalized) ??
+        byName.get(normalized) ??
+        entry
+      );
     })
     .filter((value): value is string => typeof value === 'string' && value.length > 0);
 }
 
-function normalizeKeyNode(keyNode: Record<string, unknown>, index: number, tableColumns: Column[]): Key {
+function normalizeKeyNode(
+  keyNode: Record<string, unknown>,
+  index: number,
+  tableColumns: Column[],
+  columnByPdId: Map<string, string>,
+): Key {
   const name = String(readValue(keyNode, ['Name', 'name']) ?? `key_${index}`);
   const columns = resolveColumnIds(
     tableColumns,
     collectNodes(keyNode, ['Column'])
       .map((column) => nodeText(column, ['Code', 'code', 'Name', 'name', 'Id', 'id']))
       .filter(Boolean),
+    columnByPdId,
   );
 
   return {
     id: toKeyId('key', index),
+    pdId: readPdId(keyNode),
     name,
     columns,
     isPrimary: name.toLowerCase().includes('primary') || toBoolean(readValue(keyNode, ['Primary', 'primary'])),
   };
 }
 
-function normalizeIndexNode(indexNode: Record<string, unknown>, index: number, tableColumns: Column[]): Index {
+function normalizeIndexNode(
+  indexNode: Record<string, unknown>,
+  index: number,
+  tableColumns: Column[],
+  columnByPdId: Map<string, string>,
+): Index {
   const name = String(readValue(indexNode, ['Name', 'name']) ?? `index_${index}`);
-  const columns = resolveColumnIds(
-    tableColumns,
-    collectNodes(indexNode, ['Column'])
-      .map((column) => nodeText(column, ['Code', 'code', 'Name', 'name', 'Id', 'id']))
-      .filter(Boolean),
-  );
+
+  const values: string[] = [];
+  for (const entry of collectNodes(indexNode, ['IndexColumn'])) {
+    const record = (entry as Record<string, unknown>) ?? {};
+    const expression = readValue(record, ['IndexColumn.Expression', 'Expression', 'expression']);
+    if (expression != null) {
+      values.push(String(expression));
+      continue;
+    }
+    const text = nodeText(record, ['Code', 'code', 'Name', 'name', 'Expression', 'expression']);
+    if (text) values.push(text);
+  }
+
+  if (values.length === 0) {
+    for (const entry of collectNodes(indexNode, ['Column'])) {
+      const text = nodeText(entry, ['Code', 'code', 'Name', 'name', 'Id', 'id']);
+      if (text) values.push(text);
+    }
+  }
+
+  const columns = resolveColumnIds(tableColumns, values, columnByPdId);
 
   return {
     id: toKeyId('index', index),
+    pdId: readPdId(indexNode),
     name,
     columns,
     unique: toBoolean(readValue(indexNode, ['Unique', 'unique'])),
   };
 }
 
-function normalizeTable(tableNode: Record<string, unknown>, index: number): Table {
+interface IdCounter {
+  column: number;
+  key: number;
+  index: number;
+}
+
+function normalizeTable(tableNode: Record<string, unknown>, index: number, ids: IdCounter): Table {
   const code = String(readValue(tableNode, ['Code', 'code']) ?? `table_${index}`);
   const name = String(readValue(tableNode, ['Name', 'name']) ?? code);
   const columnsNode = findByName(tableNode, ['Columns']);
-  const columns = collectNodes(columnsNode ?? tableNode, ['Column']).map((entry, columnIndex) => normalizeColumn((entry as Record<string, unknown>) ?? {}, columnIndex));
-
-  const primaryKeyRaw = findByName(tableNode, ['PrimaryKey']);
-  const primaryKey = resolveColumnIds(
-    columns,
-    collectNodes(primaryKeyRaw ?? tableNode, ['Column'])
-      .map((entry) => nodeText(entry, ['Code', 'code', 'Name', 'name', 'Id', 'id']))
-      .filter(Boolean),
+  const columns = collectNodes(columnsNode ?? tableNode, ['Column']).map((entry) =>
+    normalizeColumn((entry as Record<string, unknown>) ?? {}, ids.column++),
   );
 
+  const columnByPdId = new Map<string, string>();
+  for (const column of columns) {
+    if (column.pdId) columnByPdId.set(column.pdId.trim().toLowerCase(), column.id);
+  }
+
   const keysNode = findByName(tableNode, ['Keys']);
-  const keys = collectNodes(keysNode ?? tableNode, ['Key']).map((entry, keyIndex) => normalizeKeyNode((entry as Record<string, unknown>) ?? {}, keyIndex, columns));
+  const keys = collectNodes(keysNode ?? tableNode, ['Key']).map((entry) =>
+    normalizeKeyNode((entry as Record<string, unknown>) ?? {}, ids.key++, columns, columnByPdId),
+  );
+
+  const primaryKeyRaw = findByName(tableNode, ['PrimaryKey']);
+  let primaryKey: string[] = [];
+
+  if (primaryKeyRaw) {
+    const refs = collectNodes(primaryKeyRaw, ['Key'])
+      .map((entry) => scalarValue(entry))
+      .filter((value): value is string | number => value != null)
+      .map((value) => String(value).trim().toLowerCase())
+      .filter(Boolean);
+
+    const primary =
+      refs.length > 0
+        ? keys.find((key) => key.pdId != null && refs.includes(key.pdId.trim().toLowerCase()))
+        : undefined;
+
+    if (primary) {
+      primary.isPrimary = true;
+      primaryKey = [...primary.columns];
+    } else {
+      primaryKey = resolveColumnIds(
+        columns,
+        collectNodes(primaryKeyRaw, ['Column'])
+          .map((entry) => nodeText(entry, ['Code', 'code', 'Name', 'name', 'Id', 'id']))
+          .filter(Boolean),
+        columnByPdId,
+      );
+    }
+  }
 
   const indexesNode = findByName(tableNode, ['Indexes']);
-  const indexes = collectNodes(indexesNode ?? tableNode, ['Index']).map((entry, indexIndex) => normalizeIndexNode((entry as Record<string, unknown>) ?? {}, indexIndex, columns));
+  const indexes = collectNodes(indexesNode ?? tableNode, ['Index']).map((entry) =>
+    normalizeIndexNode((entry as Record<string, unknown>) ?? {}, ids.index++, columns, columnByPdId),
+  );
 
   return {
     id: toKeyId('table', index),
+    pdId: readPdId(tableNode),
     code,
     name,
     comment: readValue(tableNode, ['Comment', 'comment']) == null ? undefined : String(readValue(tableNode, ['Comment', 'comment'])),
@@ -224,23 +336,39 @@ function normalizeTable(tableNode: Record<string, unknown>, index: number): Tabl
 function normalizeReference(referenceNode: Record<string, unknown>, index: number): Reference {
   const name = String(readValue(referenceNode, ['Name', 'name']) ?? `reference_${index}`);
   const joinsNode = findByName(referenceNode, ['Joins']);
-  const joins = collectNodes(joinsNode ?? referenceNode, ['Join']).map((joinEntry) => {
+  const joins = collectNodes(joinsNode ?? referenceNode, ['Join', 'ReferenceJoin']).map((joinEntry) => {
     const join = (joinEntry as Record<string, unknown>) ?? {};
+
+    const legacyParent = readValue(join, ['ParentColumn', 'parentColumn']);
+    const legacyChild = readValue(join, ['ChildColumn', 'childColumn']);
+    if (legacyParent != null || legacyChild != null) {
+      return {
+        parentColumn: String(legacyParent ?? ''),
+        childColumn: String(legacyChild ?? ''),
+      };
+    }
+
+    const object1 = findByName(join, ['Object1']);
+    const object2 = findByName(join, ['Object2']);
+    const parent = object1 == null ? undefined : scalarValue(object1);
+    const child = object2 == null ? undefined : scalarValue(object2);
+
     return {
-      parentColumn: String(readValue(join, ['ParentColumn', 'parentColumn']) ?? ''),
-      childColumn: String(readValue(join, ['ChildColumn', 'childColumn']) ?? ''),
+      parentColumn: parent == null ? '' : String(parent),
+      childColumn: child == null ? '' : String(child),
     };
   });
 
   return {
     id: toKeyId('reference', index),
+    pdId: readPdId(referenceNode),
     name,
     parentTable: String(readValue(referenceNode, ['ParentTable', 'parentTable']) ?? ''),
     childTable: String(readValue(referenceNode, ['ChildTable', 'childTable']) ?? ''),
     joins,
     cardinality: String(readValue(referenceNode, ['Cardinality', 'cardinality']) ?? 'N:1'),
-    onDelete: readValue(referenceNode, ['OnDelete', 'onDelete']) == null ? undefined : String(readValue(referenceNode, ['OnDelete', 'onDelete'])),
-    onUpdate: readValue(referenceNode, ['OnUpdate', 'onUpdate']) == null ? undefined : String(readValue(referenceNode, ['OnUpdate', 'onUpdate'])),
+    onDelete: readConstraint(referenceNode, ['OnDelete', 'onDelete', 'DeleteConstraint', 'deleteConstraint']),
+    onUpdate: readConstraint(referenceNode, ['OnUpdate', 'onUpdate', 'UpdateConstraint', 'updateConstraint']),
   };
 }
 
@@ -261,24 +389,61 @@ function attachTablePositions(model: Record<string, unknown>, tables: Table[]): 
   const symbolsNode = findByName(model, ['TableSymbols']);
   const symbols = collectNodes(symbolsNode ?? model, ['TableSymbol']);
 
-  const symbolMap = new Map<string, { x: number; y: number; w: number; h: number }>();
+  interface SymbolEntry {
+    key: string;
+    position: { x: number; y: number; w: number; h: number };
+    fromRect: boolean;
+  }
+
+  const entries: SymbolEntry[] = [];
 
   for (const symbol of symbols) {
     const entry = (symbol as Record<string, unknown>) ?? {};
-    const tableRef = nodeText(entry, ['Table', 'table', 'Code', 'code', 'Name', 'name']);
-    const x = Number(readValue(entry, ['X', 'x'])) || 0;
-    const y = Number(readValue(entry, ['Y', 'y'])) || 0;
-    const w = Number(readValue(entry, ['Width', 'width', 'W', 'w'])) || 220;
-    const h = Number(readValue(entry, ['Height', 'height', 'H', 'h'])) || 180;
 
-    if (tableRef) {
-      symbolMap.set(tableRef.trim().toLowerCase(), { x, y, w, h });
+    const objectNode = findByName(entry, ['Object']);
+    let tableRef: unknown = objectNode == null ? undefined : scalarValue(objectNode);
+    if (tableRef == null) {
+      tableRef = readValue(entry, ['Table', 'table', 'Code', 'code', 'Name', 'name']);
     }
+    if (tableRef == null || String(tableRef).trim() === '') continue;
+
+    const rectValue = readValue(entry, ['Rect', 'rect']);
+    let position = rectValue == null ? undefined : parseRect(String(rectValue));
+    const fromRect = position != null;
+
+    if (!position) {
+      position = {
+        x: Number(readValue(entry, ['X', 'x'])) || 0,
+        y: Number(readValue(entry, ['Y', 'y'])) || 0,
+        w: Number(readValue(entry, ['Width', 'width', 'W', 'w'])) || 220,
+        h: Number(readValue(entry, ['Height', 'height', 'H', 'h'])) || 180,
+      };
+    }
+
+    entries.push({ key: String(tableRef).trim().toLowerCase(), position, fromRect });
+  }
+
+  const rectWidths = entries.filter((entry) => entry.fromRect).map((entry) => entry.position.w).filter((w) => w > 0);
+  const scale = rectWidths.length > 0 ? 240 / (median(rectWidths) || 240) : 1;
+
+  const symbolMap = new Map<string, { x: number; y: number; w: number; h: number }>();
+  for (const entry of entries) {
+    const position = entry.fromRect
+      ? {
+          x: entry.position.x * scale,
+          y: entry.position.y * scale,
+          w: entry.position.w * scale,
+          h: entry.position.h * scale,
+        }
+      : entry.position;
+    symbolMap.set(entry.key, position);
   }
 
   return tables.map((table) => {
-    const position = symbolMap.get(String(table.code).trim().toLowerCase())
-      ?? symbolMap.get(String(table.name).trim().toLowerCase());
+    const position =
+      (table.pdId ? symbolMap.get(table.pdId.trim().toLowerCase()) : undefined) ??
+      symbolMap.get(String(table.code).trim().toLowerCase()) ??
+      symbolMap.get(String(table.name).trim().toLowerCase());
 
     return {
       ...table,
@@ -299,12 +464,14 @@ function resolveReferenceIds(references: Reference[], tables: Table[]): Referenc
     tableIds.set(normalizeReferenceKey(table.id), table.id);
     tableIds.set(normalizeReferenceKey(table.code), table.id);
     tableIds.set(normalizeReferenceKey(table.name), table.id);
+    if (table.pdId) tableIds.set(normalizeReferenceKey(table.pdId), table.id);
 
     const columnMap = new Map<string, string>();
     for (const column of table.columns) {
       columnMap.set(normalizeReferenceKey(column.id), column.id);
       columnMap.set(normalizeReferenceKey(column.code), column.id);
       columnMap.set(normalizeReferenceKey(column.name), column.id);
+      if (column.pdId) columnMap.set(normalizeReferenceKey(column.pdId), column.id);
     }
     columnIdsByTable.set(table.id, columnMap);
   }
@@ -345,10 +512,11 @@ function readRootModel(rootNode: Record<string, unknown> | undefined): Record<st
 
 export function normalizeModel(xmlRoot: Record<string, unknown>, modelName = 'PowerDesigner model'): Model {
   const model = readRootModel(xmlRoot) ?? xmlRoot;
+  const ids: IdCounter = { column: 0, key: 0, index: 0 };
 
   const tablesNode = findByName(model, ['Tables']);
   const tableEntries = collectNodes(tablesNode ?? model, ['Table']);
-  const tables = tableEntries.map((entry, index) => normalizeTable((entry as Record<string, unknown>) ?? {}, index));
+  const tables = tableEntries.map((entry, index) => normalizeTable((entry as Record<string, unknown>) ?? {}, index, ids));
 
   const referencesNode = findByName(model, ['References']);
   const referenceEntries = collectNodes(referencesNode ?? model, ['Reference']);

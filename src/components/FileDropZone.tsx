@@ -16,7 +16,7 @@ export function FileDropZone() {
       const text = await file.text();
       const parsed = parsePowerDesignerXml(text);
       const model = normalizeModel(parsed, file.name.replace(/\.[^.]+$/, ''));
-      setModel(model);
+      setModel(model, { xml: text, fileName: file.name });
       setStatus(`Modelo cargado: ${model.name} (${model.tables.length} tablas)`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo leer el archivo.';

@@ -77,6 +77,12 @@
   color: #dbeafe;
 }
 
+.badge--editable {
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(74, 222, 128, 0.5);
+  color: #bbf7d0;
+}
+
 .badge--slate {
   background: rgba(148, 163, 184, 0.1);
   border: 1px solid rgba(148, 163, 184, 0.25);
@@ -2762,6 +2768,293 @@
   background: rgba(59, 130, 246, 0.3);
   border-color: rgba(96, 165, 250, 0.75);
   color: #dbeafe;
+}
+
+/* ---------- Botones genéricos ---------- */
+
+.btn {
+  padding: 0.5rem 0.95rem;
+  border-radius: 9px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn--ghost {
+  background: rgba(30, 41, 59, 0.7);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #cbd5e1;
+}
+
+.btn--ghost:hover:not(:disabled) {
+  border-color: rgba(148, 163, 184, 0.6);
+  color: #f1f5f9;
+}
+
+.btn--primary {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9));
+  border-color: rgba(147, 197, 253, 0.5);
+  color: #f8fafc;
+  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.28);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.95), rgba(59, 130, 246, 0.95));
+}
+
+/* ---------- Botón Editar en DetailPanel ---------- */
+
+.detail-panel__edit-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(245, 158, 11, 0.14);
+  color: #fcd34d;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.detail-panel__edit-button:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.28);
+  border-color: rgba(251, 191, 36, 0.75);
+}
+
+.detail-panel__edit-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- Modal de edición del .pdm ---------- */
+
+.editor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3vh 2vw;
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(6px);
+}
+
+.editor-modal {
+  width: min(980px, 96vw);
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: 0 34px 80px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.editor-modal--narrow {
+  width: min(460px, 94vw);
+}
+
+.editor-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.3rem 0.85rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(30, 41, 59, 0.6);
+}
+
+.editor-modal__header h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.1rem;
+  color: #f1f5f9;
+}
+
+.editor-modal__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.editor-modal__dirty {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.editor-modal__close {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.7);
+  color: #94a3b8;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.editor-modal__close:hover {
+  color: #f8fafc;
+  border-color: rgba(248, 113, 113, 0.6);
+}
+
+.editor-modal__body {
+  padding: 1.1rem 1.3rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+}
+
+.editor-modal__note {
+  margin: 0;
+  padding: 1.1rem 1.3rem 1.4rem;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.editor-section h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7dd3fc;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
+
+.editor-grid__wide {
+  grid-column: 1 / -1;
+}
+
+.editor-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.editor-grid label span {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+}
+
+.editor-modal input[type='text'] {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(2, 6, 23, 0.65);
+  color: #f1f5f9;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  width: 100%;
+  min-width: 0;
+}
+
+.editor-modal input[type='text']:focus {
+  border-color: rgba(96, 165, 250, 0.75);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+.editor-table-scroll {
+  overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 11px;
+}
+
+.editor-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  min-width: 720px;
+}
+
+.editor-table th {
+  text-align: left;
+  padding: 0.5rem 0.55rem;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7dd3fc;
+  background: rgba(30, 41, 59, 0.85);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  white-space: nowrap;
+}
+
+.editor-table td {
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.editor-table tr:last-child td {
+  border-bottom: none;
+}
+
+.editor-table tr:hover td {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.editor-table__num {
+  max-width: 5.5rem;
+  text-align: right;
+}
+
+.editor-table__check {
+  text-align: center;
+}
+
+.editor-table__check input {
+  accent-color: #3b82f6;
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+.editor-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1.3rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(30, 41, 59, 0.55);
+}
+
+.editor-modal__hint {
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+
+.editor-modal__buttons {
+  display: flex;
+  gap: 0.6rem;
+  margin-left: auto;
 }
 
 @media (max-width: 1100px) {

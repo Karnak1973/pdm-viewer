@@ -18,6 +18,9 @@ interface ModelState {
   search: string;
   view: 'diagram' | 'analysis' | 'diff' | 'relations';
 
+  sourceXml: string | null;
+  sourceFileName: string | null;
+
   layer: LayerView;
   collapsed: Set<string>;
   hideNonKey: boolean;
@@ -27,7 +30,10 @@ interface ModelState {
   pathTo: string | null;
   pathResult: string[] | null;
 
-  setModel: (model: Model) => void;
+  setModel: (
+    model: Model,
+    source?: { xml: string; fileName: string; preserveSelection?: boolean },
+  ) => void;
   setSelectedTable: (tableId: string) => void;
   setSearch: (value: string) => void;
   setView: (view: 'diagram' | 'analysis' | 'diff' | 'relations') => void;
@@ -54,19 +60,28 @@ export const useModelStore = create<ModelState>((set) => ({
   hideNonKey: false,
   focusHops: null,
   heatMetric: null,
+  sourceXml: null,
+  sourceFileName: null,
   ...initialPath,
 
-  setModel: (model) =>
-    set({
+  setModel: (model, source) =>
+    set((state) => ({
       model,
-      selectedTableId: model.tables[0]?.id ?? null,
+      selectedTableId:
+        source?.preserveSelection &&
+        state.selectedTableId &&
+        model.tables.some((table) => table.id === state.selectedTableId)
+          ? state.selectedTableId
+          : (model.tables[0]?.id ?? null),
       collapsed: new Set<string>(),
       focusHops: null,
       heatMetric: null,
       layer: 'all',
       hideNonKey: false,
+      sourceXml: source?.xml ?? null,
+      sourceFileName: source?.fileName ?? null,
       ...initialPath,
-    }),
+    })),
 
   setSelectedTable: (tableId) => set({ selectedTableId: tableId }),
   setSearch: (value) => set({ search: value }),

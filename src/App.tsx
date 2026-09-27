@@ -20,6 +20,7 @@ function App() {
   const setModel = useModelStore((state) => state.setModel);
   const view = useModelStore((state) => state.view);
   const setView = useModelStore((state) => state.setView);
+  const sourceXml = useModelStore((state) => state.sourceXml);
   const ruleConfig = useRuleConfigStore((state) => state.config);
   const diffTargetName = useDiffStore((state) => state.targetName);
 
@@ -44,7 +45,9 @@ function App() {
 
         <div className="app-header__meta">
           <GlobalSearch />
-          <span className="badge badge--blue">solo lectura</span>
+          <span className={`badge ${sourceXml ? 'badge--editable' : 'badge--blue'}`}>
+            {sourceXml ? 'editable' : 'solo lectura'}
+          </span>
           <span className={`badge badge--health ${report.counts.error > 0 ? 'has-errors' : ''}`}>
             salud {report.score}/100
           </span>
