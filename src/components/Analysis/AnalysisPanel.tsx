@@ -5,8 +5,11 @@
 import { useMemo, useState } from 'react';
 import type { Model } from '../../model/types';
 import { useModelStore } from '../../state/modelStore';
+import { useRuleConfigStore } from '../../state/ruleConfigStore';
 import { detectDuplicates } from '../../utils/duplicateDetector';
 import { lintModel, severityLabel, type IssueSeverity } from '../../utils/modelLinter';
+import { RulesConfig } from './RulesConfig';
+import { ReportExport } from './ReportExport';
 
 type SeverityFilter = IssueSeverity | 'all';
 
@@ -19,10 +22,11 @@ function scoreTone(score: number): 'good' | 'fair' | 'poor' {
 export function AnalysisPanel({ model }: { model: Model }) {
   const setSelectedTable = useModelStore((state) => state.setSelectedTable);
   const setView = useModelStore((state) => state.setView);
+  const ruleConfig = useRuleConfigStore((state) => state.config);
 
   const [filter, setFilter] = useState<SeverityFilter>('all');
 
-  const report = useMemo(() => lintModel(model), [model]);
+  const report = useMemo(() => lintModel(model, ruleConfig), [model, ruleConfig]);
   const duplicates = useMemo(() => detectDuplicates(model), [model]);
 
   const issues = useMemo(
@@ -75,6 +79,9 @@ export function AnalysisPanel({ model }: { model: Model }) {
           </div>
         </div>
       </div>
+
+      <RulesConfig />
+      <ReportExport model={model} report={report} />
 
       <div className="analysis__grid">
         <div className="analysis__card">

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useModelStore } from '../../state/modelStore';
+import { useAnnotationStore } from '../../state/annotationStore';
+import { AnnotationEditor } from '../Annotations/AnnotationEditor';
 import { generateModelSql, generateTableSql } from '../../utils/sqlGenerator';
 
 function formatSqlForDisplay(sql: string) {
@@ -15,9 +17,12 @@ function formatSqlForDisplay(sql: string) {
 }
 
 export function DetailPanel() {
-  const { model, selectedTableId } = useModelStore();
-  const [viewMode, setViewMode] = useState<'details' | 'sql' | 'model'>('details');
+  const { model, selectedTableId, setView } = useModelStore();
+  const [viewMode, setViewMode] = useState<'details' | 'sql' | 'model' | 'notes'>('details');
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const annotationCount = useAnnotationStore((state) =>
+    state.annotations.filter((a) => a.tableId === selectedTableId).length,
+  );
 
   const selectedTable = model.tables.find((table) => table.id === selectedTableId) ?? model.tables[0];
 
@@ -73,6 +78,14 @@ export function DetailPanel() {
             >
               Modelo
             </button>
+            <button
+              type="button"
+              className={viewMode === 'notes' ? 'active' : ''}
+              onClick={() => setViewMode('notes')}
+            >
+              Notas
+              {annotationCount > 0 ? <span className="detail-panel__note-badge">{annotationCount}</span> : null}
+            </button>
           </div>
           <button type="button" className="copy-button" onClick={handleCopy}>
             {copyState === 'copied' ? 'Copiado' : copyState === 'error' ? 'Error' : 'Copiar SQL'}
@@ -94,6 +107,26 @@ export function DetailPanel() {
       ) : viewMode === 'model' ? (
         <div className="sql-view">
           <pre>{formatSqlForDisplay(modelSql)}</pre>
+        </div>
+      ) : viewMode === 'notes' ? (
+        <div className="detail-notes">
+          <AnnotationEditor tableId={selectedTable.id} title={`Anotaciones de ${selectedTable.name}`} />
+
+          <div className="detail-notes__columns">
+            <h3>Anotaciones por columna</h3>
+            {selectedTable.columns.length === 0 ? (
+              <p className="analysis__empty">Esta tabla no tiene columnas.</p>
+            ) : (
+              selectedTable.columns.map((column) => (
+                <AnnotationEditor
+                  key={column.id}
+                  tableId={selectedTable.id}
+                  columnId={column.id}
+                  title={column.name}
+                />
+              ))
+            )}
+          </div>
         </div>
       ) : (
         <div className="detail-grid">
@@ -186,6 +219,13 @@ export function DetailPanel() {
                 </li>
               ))}
             </ul>
+            <button
+              type="button"
+              className="detail-panel__relations-button"
+              onClick={() => setView('relations')}
+            >
+              Ver mapa de relaciones →
+            </button>
           </div>
         </div>
       )}

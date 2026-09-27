@@ -10,11 +10,13 @@
 
 import type { Model, Table } from '../model/types';
 import { splitIdentifier } from '../ml/text';
+import type { RuleConfig, RuleSeverity } from './rules';
 
 export type IssueSeverity = 'error' | 'warning' | 'info';
 
 export interface LintIssue {
   id: string;
+  ruleId: string;
   severity: IssueSeverity;
   title: string;
   detail: string;
@@ -51,13 +53,18 @@ function parsedLength(column: { dataType: string; length?: number }): number | u
   return match ? Number(match[1]) : undefined;
 }
 
-export function lintModel(model: Model): LintReport {
+export function lintModel(model: Model, ruleConfig?: RuleConfig): LintReport {
   const issues: LintIssue[] = [];
   let counter = 0;
 
-  const push = (issue: Omit<LintIssue, 'id'>) => {
+  const push = (ruleId: string, issue: Omit<LintIssue, 'id' | 'ruleId' | 'severity'>, defaultSeverity: IssueSeverity) => {
+    const effective: RuleSeverity | undefined = ruleConfig?.[ruleId];
+    if (effective === 'off') return;
+    const severity = (effective ?? defaultSeverity) as IssueSeverity;
+    if (severity !== 'error' && severity !== 'warning' && severity !== 'info') return;
+
     counter += 1;
-    issues.push({ id: `issue-${counter}`, ...issue });
+    issues.push({ id: `issue-${counter}`, ruleId, severity, ...issue });
   };
 
   const tableById = new Map(model.tables.map((table) => [table.id, table]));
@@ -90,25 +97,23 @@ export function lintModel(model: Model): LintReport {
   for (const table of model.tables) {
     // 1. Tabla sin columnas
     if (table.columns.length === 0) {
-      push({
-        severity: 'error',
+      push('table-empty', {
         title: 'Tabla sin columnas',
         detail: `La tabla ${table.code} no define ninguna columna.`,
         tableId: table.id,
         tableName: table.name,
-      });
+      }, 'error');
     }
 
     // 2. Tabla sin clave primaria
     const primaryKey = table.primaryKey ?? table.keys.find((key) => key.isPrimary)?.columns ?? [];
     if (primaryKey.length === 0 && table.columns.length > 0) {
-      push({
-        severity: 'error',
+      push('table-no-pk', {
         title: 'Tabla sin clave primaria',
         detail: `La tabla ${table.code} no tiene clave primaria definida.`,
         tableId: table.id,
         tableName: table.name,
-      });
+      }, 'error');
     }
 
     // 3. Columnas duplicadas dentro de la tabla
@@ -119,13 +124,12 @@ export function lintModel(model: Model): LintReport {
     }
     for (const [key, count] of seen) {
       if (count > 1) {
-        push({
-          severity: 'error',
+        push('column-duplicate', {
           title: 'Columna duplicada',
           detail: `La columna ${key} aparece ${count} veces en ${table.code}.`,
           tableId: table.id,
           tableName: table.name,
-        });
+        }, 'error');
       }
     }
 
@@ -133,13 +137,12 @@ export function lintModel(model: Model): LintReport {
     for (const columnId of primaryKey) {
       const column = table.columns.find((candidate) => candidate.id === columnId);
       if (column && !column.mandatory) {
-        push({
-          severity: 'error',
+        push('pk-nullable', {
           title: 'Clave primaria anulable',
           detail: `La columna ${column.code} forma parte de la PK de ${table.code} pero admite NULL.`,
           tableId: table.id,
           tableName: table.name,
-        });
+        }, 'error');
       }
     }
 
@@ -149,59 +152,54 @@ export function lintModel(model: Model): LintReport {
 
       // 5. Posible FK no declarada
       if (looksLikeIdentifier(column.code) && !isPrimary && !isForeign) {
-        push({
-          severity: 'warning',
+        push('fk-undeclared', {
           title: 'Posible FK sin declarar',
           detail: `${table.code}.${column.code} parece un identificador externo pero no participa en ninguna relación.`,
           tableId: table.id,
           tableName: table.name,
-        });
+        }, 'warning');
       }
 
       // 6. FK sin índice que la cubra
       if (isForeign && !indexedColumns.get(table.id)?.has(column.id)) {
-        push({
-          severity: 'warning',
+        push('fk-no-index', {
           title: 'Clave foránea sin índice',
           detail: `${table.code}.${column.code} es FK y no tiene índice, lo que penaliza los joins y los borrados.`,
           tableId: table.id,
           tableName: table.name,
-        });
+        }, 'warning');
       }
 
       const length = parsedLength(column);
 
       // 7. Texto sin longitud
       if (TEXT_TYPES.test(column.dataType) && length === undefined) {
-        push({
-          severity: 'warning',
+        push('text-no-length', {
           title: 'Texto sin longitud',
           detail: `${table.code}.${column.code} usa ${column.dataType} sin longitud declarada.`,
           tableId: table.id,
           tableName: table.name,
-        });
+        }, 'warning');
       }
 
       // 8. Texto por encima del máximo de VARCHAR2 en Oracle
       if (TEXT_TYPES.test(column.dataType) && length !== undefined && length > 4000) {
-        push({
-          severity: 'warning',
+        push('varchar-out-of-range', {
           title: 'VARCHAR2 fuera de rango',
           detail: `${table.code}.${column.code} declara ${length} caracteres; en Oracle conviene usar CLOB por encima de 4000.`,
           tableId: table.id,
           tableName: table.name,
-        });
+        }, 'warning');
       }
 
       // 9. Identity sobre un tipo no numérico
       if (column.identity && !NUMERIC_TYPES.test(column.dataType)) {
-        push({
-          severity: 'error',
+        push('identity-non-numeric', {
           title: 'Identity en columna no numérica',
           detail: `${table.code}.${column.code} es IDENTITY pero su tipo es ${column.dataType}.`,
           tableId: table.id,
           tableName: table.name,
-        });
+        }, 'error');
       }
     }
 
@@ -211,13 +209,12 @@ export function lintModel(model: Model): LintReport {
       const signature = [...index.columns].sort().join(',');
       const previous = indexSignatures.get(signature);
       if (previous) {
-        push({
-          severity: 'warning',
+        push('index-duplicate', {
           title: 'Índices duplicados',
           detail: `${table.code}: ${previous} e ${index.name} cubren las mismas columnas.`,
           tableId: table.id,
           tableName: table.name,
-        });
+        }, 'warning');
       } else {
         indexSignatures.set(signature, index.name);
       }
@@ -225,13 +222,12 @@ export function lintModel(model: Model): LintReport {
 
     // 11. Convención de nombres inconsistente
     if (tableStyles.dominant && tableStyles.deviants.has(table.code)) {
-      push({
-        severity: 'info',
+      push('naming-inconsistent', {
         title: 'Convención de nombres inconsistente',
         detail: `La tabla ${table.code} no sigue el estilo dominante (${tableStyles.dominant}).`,
         tableId: table.id,
         tableName: table.name,
-      });
+      }, 'info');
     }
   }
 
@@ -242,11 +238,10 @@ export function lintModel(model: Model): LintReport {
     const label = reference.name || reference.id;
 
     if (!parent || !child) {
-      push({
-        severity: 'error',
+      push('reference-orphan', {
         title: 'Relación huérfana',
         detail: `La relación ${label} apunta a una tabla que no existe en el modelo.`,
-      });
+      }, 'error');
       continue;
     }
 
@@ -255,56 +250,51 @@ export function lintModel(model: Model): LintReport {
       const childColumn = child.columns.find((column) => column.id === join.childColumn);
 
       if (!parentColumn || !childColumn) {
-        push({
-          severity: 'error',
+        push('reference-missing-column', {
           title: 'Relación con columna inexistente',
           detail: `La relación ${label} referencia columnas que no existen.`,
           tableId: child.id,
           tableName: child.name,
-        });
+        }, 'error');
         continue;
       }
 
       const parentPrimary = (parent.primaryKey ?? []).includes(parentColumn.id);
       if (!parentPrimary) {
-        push({
-          severity: 'info',
+        push('fk-non-pk', {
           title: 'FK hacia columna no primaria',
           detail: `${label} apunta a ${parent.code}.${parentColumn.code}, que no forma parte de la clave primaria.`,
           tableId: child.id,
           tableName: child.name,
-        });
+        }, 'info');
       }
     }
 
     if (reference.parentTable === reference.childTable) {
-      push({
-        severity: 'info',
+      push('self-reference', {
         title: 'Auto-referencia',
         detail: `La relación ${label} conecta ${parent.code} consigo misma; conviene documentarla.`,
         tableId: parent.id,
         tableName: parent.name,
-      });
+      }, 'info');
     }
 
     if (/[NM]\s*:\s*[NM]/i.test(reference.cardinality)) {
-      push({
-        severity: 'warning',
+      push('many-to-many', {
         title: 'Relación N:M sin resolver',
         detail: `La relación ${label} es N:M; normalmente requiere una tabla intermedia.`,
         tableId: child.id,
         tableName: child.name,
-      });
+      }, 'warning');
     }
 
     if (reference.onDelete && /no action/i.test(reference.onDelete)) {
-      push({
-        severity: 'info',
+      push('delete-no-action', {
         title: 'Borrado sin acción definida',
         detail: `La relación ${label} no define ON DELETE, así que el borrado fallará si hay hijos.`,
         tableId: child.id,
         tableName: child.name,
-      });
+      }, 'info');
     }
   }
 

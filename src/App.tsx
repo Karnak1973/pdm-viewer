@@ -5,7 +5,12 @@ import { ERDiagram } from './components/Diagram/ERDiagram';
 import { DetailPanel } from './components/DetailPanel/DetailPanel';
 import { TableTree } from './components/Sidebar/TableTree';
 import { AnalysisPanel } from './components/Analysis/AnalysisPanel';
+import { DiffPanel } from './components/Diff/DiffPanel';
+import { RelationsView } from './components/Relations/RelationsView';
+import { GlobalSearch } from './components/Search/GlobalSearch';
 import { useModelStore } from './state/modelStore';
+import { useRuleConfigStore } from './state/ruleConfigStore';
+import { useDiffStore } from './state/diffStore';
 import { lintModel } from './utils/modelLinter';
 import { createDemoModel } from './utils/sampleModel';
 import './App.css';
@@ -15,6 +20,8 @@ function App() {
   const setModel = useModelStore((state) => state.setModel);
   const view = useModelStore((state) => state.view);
   const setView = useModelStore((state) => state.setView);
+  const ruleConfig = useRuleConfigStore((state) => state.config);
+  const diffTargetName = useDiffStore((state) => state.targetName);
 
   useEffect(() => {
     if (model.tables.length === 0) {
@@ -22,7 +29,7 @@ function App() {
     }
   }, [model.tables.length, setModel]);
 
-  const report = useMemo(() => lintModel(model), [model]);
+  const report = useMemo(() => lintModel(model, ruleConfig), [model, ruleConfig]);
 
   return (
     <div className="app-shell">
@@ -36,6 +43,7 @@ function App() {
         </div>
 
         <div className="app-header__meta">
+          <GlobalSearch />
           <span className="badge badge--blue">solo lectura</span>
           <span className={`badge badge--health ${report.counts.error > 0 ? 'has-errors' : ''}`}>
             salud {report.score}/100
@@ -73,9 +81,36 @@ function App() {
                 </span>
               ) : null}
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'relations'}
+              className={view === 'relations' ? 'active' : ''}
+              onClick={() => setView('relations')}
+            >
+              Relaciones
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'diff'}
+              className={view === 'diff' ? 'active' : ''}
+              onClick={() => setView('diff')}
+            >
+              Diff
+              {diffTargetName ? <span className="workspace__tab-badge">●</span> : null}
+            </button>
           </div>
 
-          {view === 'diagram' ? <ERDiagram /> : <AnalysisPanel model={model} />}
+          {view === 'diagram' ? (
+            <ERDiagram />
+          ) : view === 'relations' ? (
+            <RelationsView />
+          ) : view === 'diff' ? (
+            <DiffPanel model={model} />
+          ) : (
+            <AnalysisPanel model={model} />
+          )}
         </section>
 
         <DetailPanel />
