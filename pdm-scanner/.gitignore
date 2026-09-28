@@ -1,0 +1,27 @@
+# Datos generados en tiempo de ejecución: no se versionan.
+# El .pdm vive aquí, no en git: es información del cliente.
+data/
+*.db
+*.pdm
+!app/pdm/template.pdm
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+app/android/local.properties
+app/android/.gradle/
+app/ios/Pods/
+app/*.iml
+app/.idea/

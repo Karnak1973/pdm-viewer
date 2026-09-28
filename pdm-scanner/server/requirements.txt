@@ -1,0 +1,31 @@
+﻿# Python del servidor local
+# Todo se instala en el PC del usuario; nada sale de su máquina.
+
+# Núcleo de la API
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.12   # obligatorio: sin esto FastAPI no acepta multipart
+pydantic>=2.9
+
+# Cliente HTTP para hablar con Ollama en 127.0.0.1
+httpx>=0.27
+
+# --- OCR (elige uno, o ninguno y usa tesseract del sistema) ---
+
+# Opción A: mejor con diagramas, pero es una instalación pesada.
+# paddleocr>=2.9
+# paddlepaddle>=3.0
+
+# Opción B: la más fácil. Requiere instalar Tesseract aparte:
+#   winget install UB-Mannheim.TesseractOCR
+pytesseract>=0.3.13
+Pillow>=11.0
+
+# Preprocesado: enderezar, contraste y umbral. Sin esto el OCR lee la mitad.
+# opencv-python-headless>=4.10   # 'headless' no arrastra Qt, que pesa 200 MB
+numpy>=2.1
+
+# Tests
+pytest>=8.3
+httpx>=0.27
+

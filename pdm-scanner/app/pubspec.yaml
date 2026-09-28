@@ -1,0 +1,30 @@
+name: pdm_scanner
+description: Escanea diagramas de modelo de datos con el movil y genera .pdm de PowerDesigner.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Camara y galeria. image_picker evita tener que escribir permisos a mano
+  # en la parte nativa para la galeria.
+  image_picker: ^1.1.2
+  # Cliente HTTP contra el servidor local.
+  http: ^1.2.2
+  # Guardar la IP del servidor para no escribirla cada vez.
+  shared_preferences: ^2.3.2
+  # Abrir el .pdm descargado con lo que tenga el usuario.
+  open_filex: ^4.5.0
+  path_provider: ^2.1.4
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
