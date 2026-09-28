@@ -50,7 +50,7 @@ pdm-scanner/
 │   │       ├── template.pdm Plantilla real de PowerDesigner 16.6
 │   │       ├── generator.py Generación del .pdm
 │   │       └── parse.py     Lectura, para validar el ciclo completo
-│   └── tests/               50 pruebas, todas pasan sin GPU ni Ollama
+│   └── tests/               61 pruebas, todas pasan sin GPU ni Ollama
 ├── app/                     Flutter (el móvil)
 │   └── lib/
 │       ├── api.dart         Cliente HTTP con errores accionables
@@ -112,25 +112,36 @@ IP del PC: la tienes con `ipconfig` (busca *Dirección IPv4*), algo como
 
 > Flutter no estaba instalado en la máquina donde se escribió esto, así que
 > **el código Dart no se ha compilado todavía**. El servidor sí está probado
-> con 50 tests. Ver "Qué falta" más abajo.
+> con 61 tests. Ver "Qué falta" más abajo.
 
 ---
 
 ## Qué modelo elegir
 
 El tiempo de respuesta lo manda la **memoria de vídeo**, no el modelo. Medido
-en un portátil con GTX 1650 (4 GB) y Ryzen 7 4800H:
+aquí, con la foto de prueba en el portátil (GTX 1650 de 4 GB,
+Ryzen 7 4800H):
 
-| Modelo | Reparto | Tiempo por escaneo |
-| --- | --- | --- |
-| `qwen2.5-coder:7b` | 58% CPU / 42% GPU | **~120 s** |
-| `qwen2.5-coder:3b` | cabe en la VRAM | **~35 s** |
+| Modelo | Reparto | Tiempo | Aciertos |
+| --- | --- | --- | --- |
+| `qwen2.5-coder:7b` | 58% CPU / 42% GPU | **136 s** | más exacto: nulabilidad y longitudes bien |
+| `qwen2.5-coder:3b` | cabe en la VRAM | **31 s** | se equivoca más, pero las preguntas lo cazan |
 
 Un 7B no entra en una GPU de 4 GB y se va a CPU, y ahí la generación cae a
-unos 2 tokens por segundo. Si el primer escaneo tarda más de un minuto, el
-problema no es el código.
+unos 2 tokens por segundo.
 
-Con GPU de 8 GB o más, el 7B va holgado. Con menos de 4 GB, usa el 3B.
+**Con GPU de 4 GB, usa el 3B.** Cumple el criterio de 30 segundos. Y hay un
+detalle que importa: el 3B se equivoca más (se saltó una longitud y se inventó
+una nulabilidad), pero el motor de preguntas detectó el fallo y preguntó por
+ello en vez de escribir un `.pdm` con el error dentro. Ese es el comportamiento
+que buscábamos, no que el modelo acierte siempre:
+
+```
+? [column_type] ¿De qué tamaño es Cliente.CLI_NOMBRE (aparece como VARCHAR2
+                sin longitud)?  opciones: VARCHAR2(50), VARCHAR2(100), ...
+```
+
+Con más de 8 GB de VRAM, el 7B va holgado y conviene usarlo.
 
 ---
 
@@ -226,7 +237,7 @@ cd pdm-scanner/server
 python -m pytest tests/ -q
 ```
 
-50 pruebas, y ninguna necesita GPU, ni Ollama, ni un modelo descargado: el
+61 pruebas, y ninguna necesita GPU, ni Ollama, ni un modelo descargado: el
 OCR y el LLM se sustituyen por dobles. Cubren el ciclo completo del `.pdm`,
 las reglas del merge, la generación de preguntas y el contrato HTTP.
 
@@ -238,19 +249,60 @@ Honestamente, porque importa para decidir el siguiente paso:
 
 | Parte | Estado |
 | --- | --- |
-| Esquema JSON y validación | Verificado (50 tests) |
+| Esquema JSON y validación | Verificado (61 tests) |
 | Generación de `.pdm` con ida y vuelta | Verificado, con un `.pdm` real como plantilla |
 | Merge incremental y conflictos | Verificado |
 | Preguntas adaptativas | Verificado |
 | API HTTP | Verificado, servidor arrancado y probado a mano |
-| Cliente de Ollama y prompt | **Probado contra `qwen2.5-coder:7b` real**: extrae bien las tablas, tipos, longitudes, nulabilidad y la FK |
-| OCR | Código escrito, **sin probar**: no hay ni Paddle ni Tesseract instalados |
+| **OCR con Tesseract** | **Probado con foto real**: 31 fragmentos, 12/13 identificadores |
+| **Pipeline completo (foto → .pdm)** | **Probado de extremo a extremo**, con OCR y LLM reales |
 | App Flutter | **Sin compilar**: no hay Flutter en la máquina |
 | Abrir el `.pdm` en PowerDesigner | **Sin verificar**: no hay PowerDesigner aquí |
+
+El pipeline completo es `tools/pipeline_completo.py`. Con la foto de prueba
+genera un `.pdm` de 53 kB que se relee sin problemas, con las dos tablas, sus
+claves primarias y la FK.
+
+Un fallo del OCR que se propaga hasta el `.pdm`: la `_` se lee como `L`
+(`CLI_NOMBRE` → `CLI_LNOMBRE`). El LLM no lo corrige porque el texto es lo que
+hay. Se ve en la vista de revisión y se corrige desde ahí, pero conviene
+saberlo: **nadie ha inventado el dato, pero el nombre sale mal escrito**.
 
 Las dos filas en rojo son las que hay que cerrar antes de llevarlo al
 trabajo. Para el `.pdm`, el paso es abrir uno generado en PowerDesigner
 Windows: si abre y las relaciones están, el generador está.
+
+### Herramientas de diagnóstico
+
+```bash
+cd pdm-scanner/server
+
+# Compara preprocesados y modos de Tesseract contra los textos que deben leerse
+python tools/bench_ocr.py tools/diagrama_falso.jpg
+
+# Pipeline completo con OCR y LLM reales
+python tools/pipeline_completo.py tools/diagrama_falso.jpg qwen2.5-coder:3b
+
+# Genera una foto de prueba con ruido, inclinación y sombra
+python tools/generar_diagrama.py tools/diagrama_falso.jpg
+```
+
+`bench_ocr.py` es como se eligió el preprocesado. El resultado, sobre la foto
+de prueba y 13 identificadores que deben leerse:
+
+| Preprocesado | Leídos |
+| --- | --- |
+| sin tocar | 8/13 |
+| + ecualización global | **0/13** |
+| + CLAHE | 7/13 |
+| + umbral de Otsu | 7/13 |
+| **+ corrección de iluminación** | **12/13** |
+
+Lo que se ve ahí es que lo intuitivo es contraproducente: ecualizar el
+contraste y binarizar la imagen **empeoran** la lectura, porque Tesseract 5 ya
+hace su propio umbral. Lo que sí funciona es dividir la imagen por una copia
+muy desenfocada de sí misma, que quita la sombra y deja solo el texto. Ese
+cambio fue el que pasó de 8/13 a 12/13.
 
 ---
 
@@ -268,4 +320,6 @@ Windows: si abre y las relaciones están, el generador está.
   sacar los detectores de contorno de OpenCV y está pendiente.
 - **Una tabla vacía no es detectable.** Si el diagrama no la dibuja, no hay
   forma de saber que existe.
+
+
 

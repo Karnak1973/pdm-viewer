@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -106,12 +108,29 @@ class OcrNotAvailable(RuntimeError):
     """No hay ningun motor de OCR instalado."""
 
 
-def preprocess(image_bytes: bytes) -> bytes:
-    """Endereza, pasa a gris, mejora contraste y normaliza el tamaño.
+def preprocess(image_bytes: bytes, binarize: bool = False) -> bytes:
+    """Prepara la foto para que el OCR lea el texto del diagrama.
 
-    Las fotos de móvil llegan con la tabla en perspectiva y con sombras; sin
-    esto el OCR lee menos de la mitad. Si OpenCV no está, se devuelve la
-    imagen tal cual para que el flujo siga funcionando.
+    La receta está **medida**, no supuesta. Con la foto de prueba de
+    `tools/bench_ocr.py` (1400x900, inclinada, con ruido de sensor, una sombra
+    en la esquina y compresión JPEG) sobre Tesseract 5.4, de 13 identificadores
+    que deben leerse:
+
+        imagen sin tocar ............  8/13
+        + ecualización global .......  0/13   <- empeora mucho
+        + CLAHE .....................  7/13
+        + umbral de Otsu ............  7/13
+        + corrección de iluminación  12/13   <- la que vale
+
+    La corrección de iluminación es la clave: se divide la imagen por una
+    versión muy desenfocada de sí misma y queda solo el texto, sin la sombra.
+    Sin ella, las tablas que caen en la zona en penumbra desaparecen.
+
+    Lo que **no** se hace, pese a lo intuitivo: ecualizar el contraste global
+    y binarizar. Tesseract 5 hace su propio umbral interno y adelantarse le
+    quita información. `binarize=True` se deja para PaddleOCR.
+
+    Si OpenCV no está, se devuelve la imagen tal cual y el flujo sigue.
     """
     try:
         import cv2
@@ -123,21 +142,30 @@ def preprocess(image_bytes: bytes) -> bytes:
     buffer = np.frombuffer(image_bytes, dtype=np.uint8)
     imagen = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
     if imagen is None:
-        raise ValueError("no se ha podido decodificar la imagen")
+        raise ValueError("no se he podido decodificar la imagen")
 
-    # Escala de grises + ecualización: el contraste de un fondo negro sobre
-    # blanco es enorme y el OCR lo agradece.
     gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
-    gris = cv2.equalizeHist(gris)
 
-    # El texto de un diagrama es pequeño: se amplía si la imagen es pequeña.
-    altura = gris.shape[0]
-    if altura < 1200:
-        factor = 1200 / altura
+    # 1. Ruido de sensor. Antes de la iluminación, no después: el ruido hace
+    #    que el divisor tenga picos y ensucia el resultado.
+    gris = cv2.medianBlur(gris, 3)
+
+    # 2. Corrección de iluminación. El divisor es la propia imagen muy
+    #    desenfocada, así cada zona queda normalizada respecto a su fondo.
+    fondo = cv2.GaussianBlur(gris, (0, 0), sigmaX=25)
+    gris = cv2.divide(gris, fondo, scale=255)
+
+    # 3. Sólo si la foto es muy pequeña. Por debajo de 1000 px de alto se
+    #    pierde texto, pero ampliar no siempre compensa: con la iluminación ya
+    #    corregida, ampliar no aportó nada y duplica el tiempo.
+    if gris.shape[0] < 1000:
+        factor = min(3.0, 1000 / gris.shape[0])
         gris = cv2.resize(gris, None, fx=factor, fy=factor, interpolation=cv2.INTER_CUBIC)
 
-    _, binaria = cv2.threshold(gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    ok, codificada = cv2.imencode(".png", binaria)
+    if binarize:
+        gris = cv2.threshold(gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+
+    ok, codificada = cv2.imencode(".png", gris)
     if not ok:
         return image_bytes
     return codificada.tobytes()
@@ -180,8 +208,7 @@ def _tesseract(image_bytes: bytes, psm: str = "AUTO") -> OcrResult:
     import pytesseract  # type: ignore[import-not-found]
     from PIL import Image
 
-    if shutil.which("tesseract") is None and not _tesseract_configured():
-        raise OcrNotAvailable("tesseract no esta en el PATH")
+    _configurar_tesseract()
 
     imagen = Image.open(io.BytesIO(image_bytes))
     datos = pytesseract.image_to_data(
@@ -213,7 +240,49 @@ def _tesseract_configured() -> bool:
         pytesseract.get_tesseract_version()
         return True
     except Exception:  # noqa: BLE001 - aqui cualquier fallo significa "no disponible"
-        return False
+        return _find_tesseract() is not None
+
+
+def _find_tesseract() -> str | None:
+    """Localiza el ejecutable de Tesseract.
+
+    No basta con mirar el PATH: tras instalar con `winget` el ejecutable queda
+    en `C:\\Program Files\\Tesseract-OCR` y **no se añade al PATH** de una
+    sesión ya abierta (tampoco de las siguientes, si no se reinicia el
+    explorer). Buscarlo en las rutas habituales evita que el usuario tenga un
+    Tesseract instalado y la app le diga que no lo tiene.
+    """
+    encontrado = shutil.which("tesseract")
+    if encontrado:
+        return encontrado
+
+    candidatos = []
+    if os.name == "nt":
+        for variable in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
+            base = os.environ.get(variable)
+            if base:
+                candidatos.append(Path(base) / "Tesseract-OCR" / "tesseract.exe")
+    else:
+        candidatos += [Path("/usr/bin/tesseract"), Path("/usr/local/bin/tesseract")]
+
+    for candidato in candidatos:
+        if candidato.exists():
+            return str(candidato)
+    return None
+
+
+def _configurar_tesseract() -> str:
+    """Deja `pytesseract` apuntando al ejecutable y devuelve su ruta."""
+    import pytesseract  # type: ignore[import-not-found]
+
+    ruta = _find_tesseract()
+    if ruta is None:
+        raise OcrNotAvailable(
+            "Tesseract no está instalado.\n"
+            "Instálalo con:  winget install UB-Mannheim.TesseractOCR"
+        )
+    pytesseract.pytesseract.tesseract_cmd = ruta
+    return ruta
 
 
 def available_engines() -> list[str]:
@@ -230,19 +299,30 @@ def available_engines() -> list[str]:
 
 
 def run_ocr(image_bytes: bytes, engine: str = "auto", psm: str = "AUTO") -> OcrResult:
-    """Lanza el OCR. `engine=auto` prueba Paddle y cae a Tesseract."""
-    if engine == "tesseract":
-        return _tesseract(image_bytes, psm)
-    if engine == "paddleocr":
-        return _paddle(image_bytes)
+    """Lanza el OCR sobre la foto.
 
-    if "paddleocr" in available_engines():
+    `engine=auto` prueba Paddle y cae a Tesseract. Si el motor elegido no
+    devuelve nada, se reintenta con la imagen **sin preprocesar**: la
+    corrección de iluminación mejora mucho en las pruebas, pero en un
+    diagrama muy limpio puede quedarse sin texto. Mejor una foto peor leída
+    que un escaneo vacío sin explicación.
+    """
+    motores = available_engines()
+
+    if engine == "tesseract":
+        return _con_reintento(image_bytes, lambda d: _tesseract(d, psm), False)
+    if engine == "paddleocr":
+        return _con_reintento(image_bytes, _paddle, True)
+    if engine == "raw":
+        return _con_reintento(image_bytes, lambda d: _tesseract(d, psm), False, preprocesar=False)
+
+    if "paddleocr" in motores:
         try:
-            return _paddle(image_bytes)
+            return _con_reintento(image_bytes, _paddle, True)
         except Exception as error:  # noqa: BLE001 - se informa y se prueba el otro
             log.warning("PaddleOCR falló (%s), pruebo Tesseract", error)
-    if "tesseract" in available_engines():
-        return _tesseract(image_bytes, psm)
+    if "tesseract" in motores:
+        return _con_reintento(image_bytes, lambda d: _tesseract(d, psm), False)
 
     raise OcrNotAvailable(
         "no hay ningun motor de OCR. Instala uno de los dos:\n"
@@ -250,4 +330,19 @@ def run_ocr(image_bytes: bytes, engine: str = "auto", psm: str = "AUTO") -> OcrR
         "  winget install UB-Mannheim.TesseractOCR  (mas facil)\n"
         "y despues reinicia el servidor."
     )
+
+
+def _con_reintento(
+    original: bytes, ejecutar, binarizar: bool, preprocesar: bool = True
+) -> OcrResult:
+    """Ejecuta el OCR sobre la imagen preprocesada y, si no lee nada, sobre la
+    original."""
+    if preprocesar:
+        resultado = ejecutar(preprocess(original, binarize=binarizar))
+        if resultado.boxes:
+            return resultado
+        log.info("El preprocesado no ha dado texto; reintento con la imagen original")
+
+    return ejecutar(original)
+
 

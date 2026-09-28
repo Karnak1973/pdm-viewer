@@ -1,9 +1,14 @@
-# Datos generados en tiempo de ejecución: no se versionan.
+﻿# Datos generados en tiempo de ejecución: no se versionan.
 # El .pdm vive aquí, no en git: es información del cliente.
 data/
 *.db
 *.pdm
 !app/pdm/template.pdm
+
+# Salidas de las herramientas de diagnostico
+server/tools/salida.pdm
+server/tools/_proc*.png
+server/tools/diagrama_falso.jpg
 
 # Python
 __pycache__/
@@ -25,3 +30,4 @@ app/android/.gradle/
 app/ios/Pods/
 app/*.iml
 app/.idea/
+

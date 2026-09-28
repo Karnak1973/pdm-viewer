@@ -217,10 +217,10 @@ async def escanear(
     destino = IMAGES_DIR / f"{uuid.uuid4().hex}_{Path(nombre).name}"
     destino.write_bytes(contenido)
 
-    # 1. OCR
+    # 1. OCR. Se le pasa la foto original: `run_ocr` se encarga del
+    #    preprocesado y del reintento si el preprocesado no lee nada.
     try:
-        procesada = ocr_modulo.preprocess(contenido)
-        resultado_ocr = ocr_modulo.run_ocr(procesada, engine=motor_ocr)
+        resultado_ocr = ocr_modulo.run_ocr(contenido, engine=motor_ocr)
     except OcrNotAvailable as error:
         raise HTTPException(503, str(error)) from error
     except Exception as error:  # noqa: BLE001
