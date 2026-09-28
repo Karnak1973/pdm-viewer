@@ -62,14 +62,20 @@ npm run preview:offline  # versión de trabajo, sin IA externa
 - La búsqueda semántica sigue funcionando con el motor local, que no usa la red.
 
 Cómo funciona: `.env.offline` define `VITE_ENABLE_EXTERNAL_AI=false`, y ese valor
-alimenta dos cosas a la vez desde `vite.config.ts`:
+alimenta tres cosas a la vez desde `vite.config.ts`:
 
-1. El flag `EXTERNAL_AI_ENABLED` (`src/ml/buildConfig.ts`), que oculta la opción
-   en la interfaz.
+1. El flag `EXTERNAL_AI_ENABLED` (`src/ml/buildConfig.ts`), que decide qué
+   muestra la barra lateral en la búsqueda semántica.
 2. Un alias de resolución: el especificador `@neural` apunta a
    `src/ml/neural.ts` en la compilación normal y a `src/ml/neural.offline.ts`
    (un stub sin ninguna dependencia de red) en la compilación `offline`. Al no
    entrar en el grafo de módulos, Transformers no puede empaquetarse.
+3. Un segundo alias, `@externalAiPanel`, que apunta al panel de autorización
+   (`ExternalAiPanel.tsx`) o a su versión deshabilitada
+   (`ExternalAiPanel.offline.tsx`, que devuelve `null`). Hace falta porque el
+   panel menciona el host del que se descarga el modelo: si se quedara dentro
+   del componente común, esa cadena sobreviviría al minificado y la
+   auditoría de abajo daría un falso positivo.
 
 ### Cómo auditar el artefacto de trabajo
 
@@ -78,11 +84,17 @@ alimenta dos cosas a la vez desde `vite.config.ts`:
 Get-ChildItem -Recurse dist-offline -File
 
 # Y ninguna referencia a IA externa
-Select-String -Path dist-offline\* -Pattern 'huggingface|Xenova|onnxruntime|transformers'
+Get-ChildItem -Recurse dist-offline -File |
+  Select-String -Pattern 'huggingface|Xenova|onnxruntime|transformers'
 ```
 
 La segunda orden no devuelve resultados, que es la garantía verificable de que la
 compilación de trabajo no puede establecer conexiones de red.
+
+Conviene buscar en **todos** los ficheros y de forma recursiva (`Get-ChildItem
+-Recurse`), no solo en el directorio raíz: los scripts se emiten dentro de
+`dist-offline/assets/`, así que un `Select-String -Path dist-offline\*` sobre los
+ficheros sueltos de la raíz no llega a verlos.
 
 ## Uso
 
@@ -94,6 +106,59 @@ compilación de trabajo no puede establecer conexiones de red.
    - el detalle de la tabla seleccionada a la derecha
 4. Puedes cambiar entre las vistas de `Detalles`, `SQL` y `Modelo`.
 5. Si quieres copiar el DDL generado, usa el botón `Copiar SQL`.
+
+## Script de migración Oracle (pestaña Diff)
+
+Cargas el `.pdm` original, vas a la pestaña **Diff** y cargas un segundo `.pdm`
+con el modelo ya cambiado. Además del listado de diferencias, la vista **Migración**
+genera el SQL necesario para llevar la base de datos de un modelo al otro:
+
+| Vista | Qué muestra |
+| --- | --- |
+| **Impacto** | Tablas afectadas, qué cambia en cada una, sus tablas hijas, sus FKs y los índices que se rehacen |
+| **Script** | El SQL ordenado, con comentarios y dos botones para copiarlo o descargarlo como `.sql` |
+| **Rollback** | El script inverso, para volver al estado anterior |
+
+### Por qué el script va ordenado
+
+Oracle no deja modificar una columna que forma parte de una clave primaria ni de
+una clave foránea, así que el orden de las fases es obligatorio:
+
+```text
+1. Prevalidación   → duplicados en la nueva PK y filas huérfanas (comentado)
+2. DROP FKs        → las hijas que apuntan a las tablas que cambian
+3. DROP índices    → los que cubren columnas renombradas o modificadas
+4. DROP claves     → primarias y alternativas que cambian
+5. Tablas          → RENAME TO, CREATE TABLE, DROP TABLE
+6. Columnas        → RENAME COLUMN, MODIFY, ADD, DROP COLUMN
+7. ADD claves      → la PK con su nueva lista de columnas y las UNIQUE
+8. CREATE índices
+9. ADD FKs         → siempre al final, ya con los nombres nuevos
+10. Comentarios    → COMMENT ON TABLE / COLUMN
+```
+
+Las consultas de prevalidación vienen comentadas a propósito: descoméntalas y
+ejecútalas antes de tocar nada, porque son las que avisan de que el cambio va a
+fallar por datos existentes.
+
+### Qué detecta
+
+Cambios de clave primaria (alta, baja o cambio de columnas), renombrados de
+tablas y de columnas, cambios de tipo, longitud, precisión, obligatoriedad,
+default, comentarios, columnas y tablas añadidas o eliminadas, e índices y
+claves modificadas. Las tablas y columnas se emparejan por su identificador
+estable de PowerDesigner (`Id`), de modo que un renombrado se traduce en
+`RENAME COLUMN` y no en un `DROP` más un `ADD`.
+### Advertencias
+
+- Los nombres de constraints salen del modelo (`PK_<TABLA>`, el nombre de la
+  clave, el nombre de la referencia). Contrástalos con tu base de datos antes de
+  ejecutar: el propio script lleva el aviso en la cabecera.
+- El rollback devuelve la estructura anterior, pero **no recupera los datos**
+  de las columnas o tablas que el script directo eliminó. El script lo indica
+  en su cabecera cuando es el caso.
+- Cambiar una columna a `IDENTITY` no se puede resolver con `ALTER TABLE`; el
+  impacto lo señala como posible necesidad de recrear la tabla.
 
 ## Estructura del proyecto
 

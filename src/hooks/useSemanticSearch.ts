@@ -18,8 +18,6 @@ export interface SemanticSearchState {
   results: SemanticResult[] | null;
   scoreFor: (tableId: string) => number | undefined;
   isSemantic: boolean;
-  /** `false` cuando esta compilación no admite IA externa (build offline). */
-  externalAiAvailable: boolean;
   /** Indica si el usuario ha autorizado el uso de IA externa (persistente). */
   externalAllowed: boolean;
   /** Cambia la autorización; al revocarla se libera el motor y no se vuelve a usar. */
@@ -131,7 +129,6 @@ export function useSemanticSearch(
     results,
     scoreFor,
     isSemantic: enabled && results !== null,
-    externalAiAvailable: EXTERNAL_AI_ENABLED,
     externalAllowed,
     setExternalAllowed,
     loadNeural,

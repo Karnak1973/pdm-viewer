@@ -8,11 +8,13 @@
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 
-    /* El motor de embeddings se resuelve por alias en Vite; aquí se tipa
-       siempre contra la implementación real, que es la que define la API.
-       Los `paths` se resuelven relativos a este archivo, sin `baseUrl`. */
+    /* El motor de embeddings y el panel de IA externa se resuelven por alias
+       en Vite; aquí se tipan siempre contra la implementación real, que es la
+       que define la API. Los `paths` se resuelven relativos a este archivo,
+       sin `baseUrl`. */
     "paths": {
-      "@neural": ["./src/ml/neural.ts"]
+      "@neural": ["./src/ml/neural.ts"],
+      "@externalAiPanel": ["./src/components/Sidebar/ExternalAiPanel.tsx"]
     },
 
     /* Bundler mode */

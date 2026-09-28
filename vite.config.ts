@@ -24,6 +24,14 @@ export default defineConfig(({ mode }) => {
           rootDir,
           externalAiEnabled ? 'src/ml/neural.ts' : 'src/ml/neural.offline.ts',
         ),
+        // Mismo criterio para el panel de autorización: en el build offline
+        // no se empaqueta, así que tampoco queda el nombre del host dentro.
+        '@externalAiPanel': resolve(
+          rootDir,
+          externalAiEnabled
+            ? 'src/components/Sidebar/ExternalAiPanel.tsx'
+            : 'src/components/Sidebar/ExternalAiPanel.offline.tsx',
+        ),
       },
     },
   }
