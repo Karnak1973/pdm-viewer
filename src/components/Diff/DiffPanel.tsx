@@ -5,13 +5,13 @@
  * verde = añadido, rojo = eliminado, ámbar = modificado.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Model } from '../../model/types';
 import { useDiffStore } from '../../state/diffStore';
 import { parsePowerDesignerXml } from '../../parser/xmlParser';
 import { normalizeModel } from '../../parser/normalizer';
-import { generateAlterSql } from '../../utils/modelDiff';
 import type { ObjectDiff, ChangeKind } from '../../utils/modelDiff';
+import { MigrationSection } from './MigrationSection';
 
 const KIND_LABEL: Record<ChangeKind, string> = {
   added: 'Añadida',
@@ -75,17 +75,11 @@ export function DiffPanel({ model }: { model: Model }) {
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState('');
-  const [showAlter, setShowAlter] = useState(false);
 
   // Recalcular cuando cambia cualquiera de los dos modelos.
   useEffect(() => {
     if (targetModel) recompute(model);
   }, [model, targetModel, recompute]);
-
-  const alterSql = useMemo(
-    () => (diff && targetModel ? generateAlterSql(diff, targetModel) : []),
-    [diff, targetModel],
-  );
 
   const loadTarget = async (file: File | undefined) => {
     if (!file) return;
@@ -147,7 +141,6 @@ export function DiffPanel({ model }: { model: Model }) {
             onClick={() => {
               clearTarget();
               setStatus('');
-              setShowAlter(false);
             }}
           >
             Limpiar
@@ -185,24 +178,17 @@ export function DiffPanel({ model }: { model: Model }) {
           {diff.summary.total === 0 ? (
             <p className="diff-panel__none">Los dos modelos son idénticos.</p>
           ) : (
-            <div className="diff-body">
-              <DiffGroup title="Tablas" items={diff.tables} />
-              <DiffGroup title="Columnas" items={diff.columns} />
-              <DiffGroup title="Relaciones" items={diff.references} />
-              <DiffGroup title="Índices" items={diff.indexes} />
-              <DiffGroup title="Claves" items={diff.keys} />
-            </div>
-          )}
+            <>
+              <div className="diff-body">
+                <DiffGroup title="Tablas" items={diff.tables} />
+                <DiffGroup title="Columnas" items={diff.columns} />
+                <DiffGroup title="Relaciones" items={diff.references} />
+                <DiffGroup title="Índices" items={diff.indexes} />
+                <DiffGroup title="Claves" items={diff.keys} />
+              </div>
 
-          {alterSql.length > 0 && (
-            <div className="diff-alter">
-              <button type="button" onClick={() => setShowAlter(!showAlter)}>
-                {showAlter ? 'Ocultar' : 'Ver'} ALTER TABLE ({alterSql.length} sentencias)
-              </button>
-              {showAlter && (
-                <pre className="diff-alter__code">{alterSql.join('\n')}</pre>
-              )}
-            </div>
+              <MigrationSection model={model} targetModel={targetModel} />
+            </>
           )}
         </>
       )}

@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { generateTableSql } from './sqlGenerator';
+import { formatDataType, generateTableSql } from './sqlGenerator';
+import type { Column } from '../model/types';
+
+function col(id: string, dataType: string, opts: Partial<Column> = {}): Column {
+  return {
+    id,
+    code: id,
+    name: id,
+    dataType,
+    mandatory: true,
+    identity: false,
+    ...opts,
+  };
+}
 
 describe('generateTableSql', () => {
   it('builds Oracle-style CREATE TABLE and index statements from a model table', () => {
@@ -24,5 +37,35 @@ describe('generateTableSql', () => {
     expect(sql).toContain('CONSTRAINT "PK_Customer" PRIMARY KEY ("CustomerID")');
     expect(sql).toContain('CREATE INDEX "IX_Customer_Email"');
     expect(sql).toContain('ON "Customer" ("Email")');
+  });
+
+  it('usa el nombre de la clave del modelo para la restricción de PK', () => {
+    const table = {
+      id: 'table-1',
+      code: 'Pedido',
+      name: 'Pedido',
+      columns: [col('column-1', 'INTEGER')],
+      primaryKey: ['column-1'],
+      keys: [{ id: 'key-1', name: 'PK_PEDIDO_CLAVE', columns: ['column-1'], isPrimary: true }],
+      indexes: [],
+    };
+
+    expect(generateTableSql(table)).toContain('CONSTRAINT "PK_PEDIDO_CLAVE" PRIMARY KEY ("column-1")');
+  });
+});
+
+describe('formatDataType — tipos de otros motores', () => {
+  it('traduce los tipos que PowerDesigner guarda del motor de origen', () => {
+    expect(formatDataType(col('c', 'INT8', { length: 8 }))).toBe('NUMBER(8)');
+    expect(formatDataType(col('c', 'FLOAT8'))).toBe('NUMBER');
+    expect(formatDataType(col('c', 'BOOL'))).toBe('NUMBER(1)');
+    expect(formatDataType(col('c', 'BYTEA'))).toBe('BLOB');
+    expect(formatDataType(col('c', 'TIMESTAMPTZ'))).toBe('TIMESTAMP');
+    expect(formatDataType(col('c', 'MONEY'))).toBe('NUMBER(16, 2)');
+  });
+
+  it('cae en VARCHAR2 cuando el modelo no declara tipo', () => {
+    expect(formatDataType(col('c', 'unknown'))).toBe('VARCHAR2(255)');
+    expect(formatDataType(col('c', 'VARCHAR', { length: 120 }))).toBe('VARCHAR2(120)');
   });
 });

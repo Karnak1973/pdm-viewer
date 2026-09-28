@@ -1,6 +1,6 @@
 import type { Column, Index, Model, Reference, Table } from '../model/types';
 
-function escapeIdentifier(name: string): string {
+export function escapeIdentifier(name: string): string {
   const safe = String(name ?? '').replace(/"/g, '""');
   return `"${safe}"`;
 }
@@ -12,6 +12,19 @@ function getColumnById(table: Table, columnId: string | undefined): Column | und
 
 function normalizeOracleType(base: string, length?: number, precision?: number): string {
   const upper = base.trim().toUpperCase();
+
+  // Tipos de otros motores que aparecen en los .pdm y no existen en Oracle.
+  if (upper === 'INT8' || upper === 'INT4' || upper === 'INT2' || upper === 'SERIAL') {
+    return length ? `NUMBER(${length})` : 'NUMBER';
+  }
+  if (upper === 'FLOAT8' || upper === 'FLOAT4' || upper === 'DOUBLE PRECISION' || upper === 'REAL') {
+    return 'NUMBER';
+  }
+  if (upper === 'BOOL') return 'NUMBER(1)';
+  if (upper === 'BYTEA') return 'BLOB';
+  if (upper === 'TIMESTAMPTZ' || upper === 'TIMESTAMP WITH TIME ZONE') return 'TIMESTAMP';
+  if (upper === 'MONEY') return 'NUMBER(16, 2)';
+  if (upper === 'UNKNOWN' || upper === '') return 'VARCHAR2(255)';
 
   if (upper === 'INTEGER' || upper === 'INT') return 'NUMBER';
   if (upper === 'BIGINT') return 'NUMBER(19)';
@@ -34,11 +47,17 @@ function normalizeOracleType(base: string, length?: number, precision?: number):
   return upper;
 }
 
-function formatDataType(column: Column): string {
+export function formatDataType(column: Column): string {
   return normalizeOracleType(String(column.dataType ?? 'VARCHAR'), column.length, column.precision);
 }
 
-function formatDefaultValue(value: string | undefined): string | undefined {
+/** Nombre de la restricción de clave primaria: la del modelo si existe. */
+export function pkConstraintName(table: Pick<Table, 'name' | 'keys'>): string {
+  const primary = table.keys?.find((key) => key.isPrimary);
+  return primary?.name || `PK_${table.name}`;
+}
+
+export function formatDefaultValue(value: string | undefined): string | undefined {
   if (value == null) return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -51,7 +70,9 @@ function formatDefaultValue(value: string | undefined): string | undefined {
   return `'${trimmed.replace(/'/g, "''")}'`;
 }
 
-export function generateTableSql(table: Pick<Table, 'name' | 'columns' | 'primaryKey' | 'indexes'>): string {
+export function generateTableSql(
+  table: Pick<Table, 'name' | 'columns' | 'primaryKey' | 'indexes' | 'keys'>,
+): string {
   const lines: string[] = [];
   lines.push(`CREATE TABLE ${escapeIdentifier(table.name)} (`);
 
@@ -84,7 +105,7 @@ export function generateTableSql(table: Pick<Table, 'name' | 'columns' | 'primar
       .map((column) => escapeIdentifier(column.name));
 
     if (pkColumns.length > 0) {
-      columnLines.push(`  CONSTRAINT ${escapeIdentifier(`PK_${table.name}`)} PRIMARY KEY (${pkColumns.join(', ')})`);
+      columnLines.push(`  CONSTRAINT ${escapeIdentifier(pkConstraintName(table))} PRIMARY KEY (${pkColumns.join(', ')})`);
     }
   }
 

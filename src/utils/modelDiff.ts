@@ -46,6 +46,12 @@ function fmt(value: unknown): string {
 
 function diffColumn(base: Column, target: Column): FieldChange[] {
   const changes: FieldChange[] = [];
+  if (base.code !== target.code) {
+    changes.push({ field: 'Código', before: base.code, after: target.code });
+  }
+  if (base.name !== target.name) {
+    changes.push({ field: 'Nombre', before: base.name, after: target.name });
+  }
   if (base.dataType !== target.dataType) {
     changes.push({ field: 'Tipo', before: base.dataType, after: target.dataType });
   }
@@ -76,6 +82,9 @@ function diffColumn(base: Column, target: Column): FieldChange[] {
 
 function diffIndex(base: Index, target: Index): FieldChange[] {
   const changes: FieldChange[] = [];
+  if (base.name !== target.name) {
+    changes.push({ field: 'Nombre', before: base.name, after: target.name });
+  }
   if (base.unique !== target.unique) {
     changes.push({ field: 'Unique', before: fmt(base.unique), after: fmt(target.unique) });
   }
@@ -89,6 +98,9 @@ function diffIndex(base: Index, target: Index): FieldChange[] {
 
 function diffKey(base: Key, target: Key): FieldChange[] {
   const changes: FieldChange[] = [];
+  if (base.name !== target.name) {
+    changes.push({ field: 'Nombre', before: base.name, after: target.name });
+  }
   if (base.isPrimary !== target.isPrimary) {
     changes.push({ field: 'Primary', before: fmt(base.isPrimary), after: fmt(target.isPrimary) });
   }
@@ -133,19 +145,29 @@ function diffReference(base: Reference, target: Reference): FieldChange[] {
 
 function diffTable(base: Table, target: Table): FieldChange[] {
   const changes: FieldChange[] = [];
+  if (base.code !== target.code) {
+    changes.push({ field: 'Código', before: base.code, after: target.code });
+  }
+  if (base.name !== target.name) {
+    changes.push({ field: 'Nombre', before: base.name, after: target.name });
+  }
   if ((base.comment ?? '') !== (target.comment ?? '')) {
     changes.push({ field: 'Comentario', before: fmt(base.comment), after: fmt(target.comment) });
   }
   return changes;
 }
 
-/** Empareja por code (si existe), luego por name, luego por id. */
-function pairByCode<T extends { id: string; name: string; code?: string }>(
+/**
+ * Empareja por pdId (estable entre ficheros), luego por code,
+ * luego por name y al final por id (posicional, el peor caso).
+ */
+export function pairByCode<T extends { id: string; name: string; code?: string; pdId?: string }>(
   base: T[],
   target: T[],
 ): { baseOnly: T[]; targetOnly: T[]; paired: [T, T][] } {
   const targetByKey = new Map<string, T>();
   for (const item of target) {
+    if (item.pdId) targetByKey.set(`pdid:${item.pdId.trim().toLowerCase()}`, item);
     if (item.code) targetByKey.set(`code:${item.code.toLowerCase()}`, item);
     targetByKey.set(`name:${item.name.toLowerCase()}`, item);
     targetByKey.set(`id:${item.id}`, item);
@@ -157,6 +179,7 @@ function pairByCode<T extends { id: string; name: string; code?: string }>(
 
   for (const item of base) {
     const match =
+      (item.pdId ? targetByKey.get(`pdid:${item.pdId.trim().toLowerCase()}`) : undefined) ??
       (item.code ? targetByKey.get(`code:${item.code.toLowerCase()}`) : undefined) ??
       targetByKey.get(`name:${item.name.toLowerCase()}`) ??
       targetByKey.get(`id:${item.id}`);
