@@ -237,7 +237,7 @@ cd pdm-scanner/server
 python -m pytest tests/ -q
 ```
 
-61 pruebas, y ninguna necesita GPU, ni Ollama, ni un modelo descargado: el
+77 pruebas, y ninguna necesita GPU, ni Ollama, ni un modelo descargado: el
 OCR y el LLM se sustituyen por dobles. Cubren el ciclo completo del `.pdm`,
 las reglas del merge, la generación de preguntas y el contrato HTTP.
 
@@ -249,7 +249,7 @@ Honestamente, porque importa para decidir el siguiente paso:
 
 | Parte | Estado |
 | --- | --- |
-| Esquema JSON y validación | Verificado (61 tests) |
+| Esquema JSON y validación | Verificado (77 tests) |
 | Generación de `.pdm` con ida y vuelta | Verificado, con un `.pdm` real como plantilla |
 | Merge incremental y conflictos | Verificado |
 | Preguntas adaptativas | Verificado |
@@ -258,6 +258,49 @@ Honestamente, porque importa para decidir el siguiente paso:
 | **Pipeline completo (foto → .pdm)** | **Probado de extremo a extremo**, con OCR y LLM reales |
 | App Flutter | **Sin compilar**: no hay Flutter en la máquina |
 | Abrir el `.pdm` en PowerDesigner | **Sin verificar**: no hay PowerDesigner aquí |
+
+Sobre la última fila, que es la que decide si esto sirve, se ha hecho todo lo
+demás. El `.pdm` generado se ha auditado de dos formas independientes:
+
+**1. Frente al `.pdm` real, elemento a elemento** (`tools/auditar_pdm.py`).
+Se compara la firma de cada tipo de objeto (qué hijos y qué atributos lleva)
+con la del `template.pmd`, que es un fichero real de PowerDesigner. Si al
+generar se dejara de escribir algo que el formato trae, salta aunque el XML
+sea perfectamente válido. Resultado: *todo correcto*, sin referencias
+colgantes, sin ids repetidos, cabecera completa.
+
+**2. Con el parser de la app web**, que es TypeScript, vive en otro lenguaje
+y se escribió aparte contra `.pdm` reales. Si un lector independiente ve lo
+mismo que el generador, es muy improbable que el error esté en el formato y no
+en una lectura compartida.
+
+```bash
+python tools/auditar_pdm.py salida.pdm
+npx vite-node pdm-scanner/server/tools/leer_con_el_visor.ts salida.pdm
+```
+
+```
+CLIENTE (Cliente)
+  PK: (CLI_ID, CLI_OFICIO, CLI_NIF) -> PK_CLIENTE
+  IDX IX_CLIENTE_NIF (CLI_NIF) unique=true
+PEDIDO (Pedido)
+  PK: (PED_ID) -> PK_PEDIDO
+  IDX IX_PEDIDO_FECHA (PED_FECHA) unique=false
+LINEA_PEDIDO (Linea)
+  PK: (LIN_PED_ID, LIN_NUMLIN) -> PK_LINEA
+
+FK FK_PEDIDO_CLIENTE: PEDIDO(PED_CLI_ID, PED_CLI_OFICIO, PED_CLI_NIF) -> CLIENTE(CLI_ID, CLI_OFICIO, CLI_NIF)
+FK FK_LINEA_PEDIDO: LINEA_PEDIDO(LIN_PED_ID) -> PEDIDO(PED_ID)
+```
+
+La **FK compuesta de tres columnas** es el caso difícil y se reconstruye bien:
+tres `ReferenceJoin`, la clave del padre y el orden de columnas intacto.
+
+Todo eso está en `tests/test_auditoria_pdm.py`, así que una regresión de
+formato salta en la suite y no al abrir el fichero en PowerDesigner dentro de
+seis meses. Aun así **el paso que queda es abrirlo en PowerDesigner**: es la
+única prueba que de verdad valida el formato, porque PowerDesigner puede
+descartar en silencio cosas que un XML válido no delata.
 
 El pipeline completo es `tools/pipeline_completo.py`. Con la foto de prueba
 genera un `.pdm` de 53 kB que se relee sin problemas, con las dos tablas, sus
@@ -320,6 +363,7 @@ cambio fue el que pasó de 8/13 a 12/13.
   sacar los detectores de contorno de OpenCV y está pendiente.
 - **Una tabla vacía no es detectable.** Si el diagrama no la dibuja, no hay
   forma de saber que existe.
+
 
 
 
