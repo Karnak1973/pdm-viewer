@@ -237,7 +237,7 @@ cd pdm-scanner/server
 python -m pytest tests/ -q
 ```
 
-77 pruebas, y ninguna necesita GPU, ni Ollama, ni un modelo descargado: el
+88 pruebas, y ninguna necesita GPU, ni Ollama, ni un modelo descargado: el
 OCR y el LLM se sustituyen por dobles. Cubren el ciclo completo del `.pdm`,
 las reglas del merge, la generación de preguntas y el contrato HTTP.
 
@@ -249,7 +249,7 @@ Honestamente, porque importa para decidir el siguiente paso:
 
 | Parte | Estado |
 | --- | --- |
-| Esquema JSON y validación | Verificado (77 tests) |
+| Esquema JSON y validación | Verificado (88 tests) |
 | Generación de `.pdm` con ida y vuelta | Verificado, con un `.pdm` real como plantilla |
 | Merge incremental y conflictos | Verificado |
 | Preguntas adaptativas | Verificado |
@@ -296,9 +296,42 @@ FK FK_LINEA_PEDIDO: LINEA_PEDIDO(LIN_PED_ID) -> PEDIDO(PED_ID)
 La **FK compuesta de tres columnas** es el caso difícil y se reconstruye bien:
 tres `ReferenceJoin`, la clave del padre y el orden de columnas intacto.
 
-Todo eso está en `tests/test_auditoria_pdm.py`, así que una regresión de
-formato salta en la suite y no al abrir el fichero en PowerDesigner dentro de
-seis meses. Aun así **el paso que queda es abrirlo en PowerDesigner**: es la
+**3. Reconstruyendo el `.pdm` real** (`tests/test_fidelidad_pdm.py`). La más
+dura de las tres: se lee `template.pmd` —que es un fichero auténtico de
+PowerDesigner—, se reconstruye con el generador y se vuelve a leer. El modelo
+que sale a la segunda vuelta es **idéntico** al de la primera: mismas tablas,
+mismas columnas en el mismo orden, misma PK, mismo índice, y la
+`Reference_1` del real vuelve con sus columnas en su sitio.
+
+Eso no demuestra que PowerDesigner acepte el fichero, pero descarta algo
+distinto e igualmente importante: que entre el formato de entrada y el de
+salida haya pérdidas. Si un día un `.pdm` generado se descarta al abrirlo, el
+culpable no será el generador.
+
+Y esta prueba ya ha encontrado un bug real: el parser se confundía con un
+`<o:Reference Ref="o8"/>` que hay en el fichero real (el símbolo de la
+relación en el diagrama) y avisaba de una "referencia incompleta" que no
+existía. Es el mismo tipo de error que el de `_blueprint` en el generador —
+referencias y definiciones conviven en el mismo XML, y las referencias salen
+antes —, pero en el otro lado. **Solo aparecía leyendo un `.pdm` auténtico.**
+
+También se han puesto al día los atributos de la cabecera que describen al
+modelo: `Name` (que decía `example` mientras el modelo se llamaba `Banco`),
+`ID` y `LastModificationDate`. El `ID` tiene que coincidir con el
+`<a:ObjectID>` de `o:Model`, así que se regeneran los dos a la vez: un modelo
+nuevo no debe reclamar la identidad del que le sirve de plantilla. Los
+recuentos `Objects` y `Symbols` **no se tocan**: la plantilla dice
+`Objects="81"` con 22 nodos con `Id`, así que son contabilidad interna de
+PowerDesigner y recalcularlos con una cuenta propia sería inventar.
+
+```bash
+cd pdm-scanner/server
+python -m pytest tests/test_fidelidad_pdm.py -q
+```
+
+Todo eso está en la suite, así que una regresión de formato salta al
+ejecutar los tests y no al abrir el fichero en PowerDesigner dentro de seis
+meses. Aun así **el paso que queda es abrirlo en PowerDesigner**: es la
 única prueba que de verdad valida el formato, porque PowerDesigner puede
 descartar en silencio cosas que un XML válido no delata.
 
@@ -363,6 +396,7 @@ cambio fue el que pasó de 8/13 a 12/13.
   sacar los detectores de contorno de OpenCV y está pendiente.
 - **Una tabla vacía no es detectable.** Si el diagrama no la dibuja, no hay
   forma de saber que existe.
+
 
 
 

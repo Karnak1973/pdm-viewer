@@ -64,9 +64,11 @@ def parse_pdm(xml_text: str) -> ParseResult:
 
     # Tablas
     for table_node in root.iter(O + "Table"):
-        # `root.iter` tambien pasa por las referencias (`<o:Table Ref="o9"/>`)
-        # que hay en los simbolos del diagrama y en las propias FKs. Esas no
-        # tienen Code, asi que el filtro de abajo ya las descarta.
+        # `iter` también pasa por las referencias (`<o:Table Ref="o9"/>`) que
+        # hay en los símbolos del diagrama y en las propias FKs. Esas no
+        # tienen Id, así que el filtro las descarta.
+        if not table_node.get("Id"):
+            continue
         code = _text(table_node, A + "Code")
         if not code:
             continue
@@ -144,6 +146,12 @@ def parse_pdm(xml_text: str) -> ParseResult:
 
     # Referencias
     for reference_node in root.iter(O + "Reference"):
+        # Igual que con las tablas, `iter` también pasa por las referencias
+        # (`<o:Reference Ref="o8"/>`), que son el símbolo de la relación en el
+        # diagrama y salen **antes** que la definición. Sin este filtro, leer
+        # un .pdm real da un aviso de "referencia incompleta" que no existe.
+        if not reference_node.get("Id"):
+            continue
         name = _text(reference_node, A + "Name")
         parent_table = _resolve_table_code(root, reference_node.find(C + "ParentTable", NS))
         child_table = _resolve_table_code(root, reference_node.find(C + "ChildTable", NS))

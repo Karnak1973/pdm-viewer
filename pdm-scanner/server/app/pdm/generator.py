@@ -584,9 +584,13 @@ def build_pdm(
     # --- Nombre del modelo ----------------------------------------------
 
     model_node = _find(root, ".//" + O + "Model")
+    object_id = _guid()
     if model_node is not None:
         _set_text(model_node, A + "Name", model.name)
         _set_text(model_node, A + "Code", model.name)
+        _set_text(model_node, A + "ObjectID", object_id)
+
+    cabecera = _actualizar_cabecera(declaration + prologue, model.name, object_id)
 
     # El formato .pdm no tiene forma de decir "no se sabe si admite NULL":
     # o se escribe Column.Mandatory o no se escribe. Como no escribirla
@@ -603,7 +607,36 @@ def build_pdm(
     # ElementTree escribe `<x />`; PowerDesigner genera `<x/>`. Es solo
     # cosmetics, pero cuanto mas fiel sea el fichero menos nos apartamos.
     xml = xml.replace(" />", "/>")
-    return f"{declaration}\n{prologue}{xml}\n", warnings
+    return f"{cabecera}{xml}\n", warnings
+
+
+# Atributos de la instrucción <?PowerDesigner ...?> que hay que poner al día.
+# El resto se deja como está a propósito: `Objects` y `Symbols` son recuentos
+# internos de PowerDesigner que no coinciden con los objetos visibles del
+# fichero (la plantilla dice Objects="81" con 22 nodos con Id), así que
+# recalcularlos con una cuenta propia sería inventar. Si se dejan, PowerDesigner
+# los recalcula al guardar.
+_CABECERA = {
+    "Name": re.compile(r'(\bName=")([^"]*)(")'),
+    "ID": re.compile(r'(\bID="\{)([^}]*)(\}")'),
+    "LastModificationDate": re.compile(r'(\bLastModificationDate=")(\d+)(")'),
+}
+
+
+def _actualizar_cabecera(cabecera: str, nombre: str, object_id: str) -> str:
+    """Pone al día la instrucción de cabecera del fichero.
+
+    `Name` y `ID` tienen que **coincidir con el nodo o:Model**, o el modelo
+    aparece con dos nombres distintos. `ID` es el ObjectID del modelo entre
+    llaves, así que se regenera junto con él: un modelo nuevo no debería
+    reclamar la identidad del que sirve de plantilla.
+    """
+    cabecera = _CABECERA["Name"].sub(lambda m: m.group(1) + nombre + m.group(3), cabecera, count=1)
+    cabecera = _CABECERA["ID"].sub(lambda m: m.group(1) + object_id + m.group(3), cabecera, count=1)
+    cabecera = _CABECERA["LastModificationDate"].sub(
+        lambda m: m.group(1) + str(_now()) + m.group(3), cabecera, count=1
+    )
+    return cabecera
 
 
 def _ordered_keys(table: Table) -> Iterable[Key]:
