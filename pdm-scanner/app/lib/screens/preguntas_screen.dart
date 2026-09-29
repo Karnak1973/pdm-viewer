@@ -8,8 +8,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'models.dart';
-import 'state.dart';
+import '../models.dart';
+import '../state.dart';
 
 class PreguntasScreen extends StatefulWidget {
   const PreguntasScreen({super.key});

@@ -20,6 +20,7 @@ venv/
 *.egg-info/
 
 # Flutter / Dart
+windows/
 .dart_tool/
 .packages
 build/
@@ -30,4 +31,5 @@ app/android/.gradle/
 app/ios/Pods/
 app/*.iml
 app/.idea/
+
 

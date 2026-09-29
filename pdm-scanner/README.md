@@ -106,13 +106,58 @@ flutter pub get
 flutter run
 ```
 
-Necesitas un móvil Android o un emulador. En la primera pantalla escribe la
-IP del PC: la tienes con `ipconfig` (busca *Dirección IPv4*), algo como
-`http://192.168.1.40:8000`.
+En la primera pantalla escribe la IP del PC: la tienes con `ipconfig` (busca
+*Dirección IPv4*), algo como `http://192.168.1.40:8000`.
 
-> Flutter no estaba instalado en la máquina donde se escribió esto, así que
-> **el código Dart no se ha compilado todavía**. El servidor sí está probado
-> con 61 tests. Ver "Qué falta" más abajo.
+**Instalado y probado en esta máquina:**
+
+| Comprobación | Resultado |
+| --- | --- |
+| `flutter analyze` | **No issues found** |
+| `flutter test` | **15 tests, todos pasan** |
+| `flutter build apk --release` | **APK generado** |
+| `flutter build windows --release` | exe generado y **arranca sin morir** |
+
+Los APKs quedan en `pdm-scanner/app/build/app/outputs/flutter-apk/`:
+
+| Fichero | Tamaño | Para qué |
+| --- | --- | --- |
+| `app-arm64-v8a-release.apk` | 17,3 MB | Móviles Android modernos (el 99% de los casos) |
+| `app-armeabi-v7a-release.apk` | 14,8 MB | Móviles antiguos |
+| `app-x86_64-release.apk` | 18,7 MB | Emulador de Android |
+| `app-release.apk` | 49,1 MB | Los tres dentro, para no decidir |
+
+Instalar en un móvil por cable: `adb install -r app-arm64-v8a-release.apk`.
+O copiar el `.apk` al móvil y abrirlo (hay que permitir "instalar apps de
+orígenes desconocidos").
+
+Verificado con `aapt2 dump badging`: paquete `es.pdmviewer.pdm_scanner`,
+versión 0.1.0, `minSdk` 24 (Android 7.0), `targetSdk` 36, permisos de cámara,
+internet y estado de la red, y etiqueta "PDM Scanner".
+
+### Lo que hace falta para compilar
+
+| Herramienta | Versión | Para qué |
+| --- | --- | --- |
+| Flutter | 3.47.5 (stable) | SDK de Dart y toolchain |
+| JDK | 17 | Gradle |
+| Android SDK | platform 36 + build-tools 36 y 28.0.3 | Compilar el APK |
+
+El JDK 17 importa: con el Java 8 que venía en la máquina, Gradle ni arranca.
+El Android SDK se instala con `sdkmanager`, y `flutter doctor` dice lo que
+falta.
+
+### Lo que no se ha podido probar
+
+**La app no se ha ejecutado en un Android.** No hay dispositivo ni emulador en
+esta máquina, así que se ha comprobado que compila, que el análisis estático
+está limpio, que los tests pasan y que el proceso arranca (también en Windows
+desktop), pero **nadie ha tocado un botón ni ha hecho una foto**. Quedan sin
+probar: la cámara de verdad, la subida del fichero y las preguntas en un
+teléfono.
+
+Eso es lo primero que hay que hacer al cogerla: instalarla, meter la IP del
+servidor y hacer una foto a un diagrama impreso.
 
 ---
 
@@ -237,7 +282,7 @@ cd pdm-scanner/server
 python -m pytest tests/ -q
 ```
 
-88 pruebas, y ninguna necesita GPU, ni Ollama, ni un modelo descargado: el
+88 del servidor (sin GPU ni Ollama) y 15 de la app. En total, ninguna necesita GPU ni un
 OCR y el LLM se sustituyen por dobles. Cubren el ciclo completo del `.pdm`,
 las reglas del merge, la generación de preguntas y el contrato HTTP.
 
@@ -256,8 +301,8 @@ Honestamente, porque importa para decidir el siguiente paso:
 | API HTTP | Verificado, servidor arrancado y probado a mano |
 | **OCR con Tesseract** | **Probado con foto real**: 31 fragmentos, 12/13 identificadores |
 | **Pipeline completo (foto → .pdm)** | **Probado de extremo a extremo**, con OCR y LLM reales |
-| App Flutter | **Sin compilar**: no hay Flutter en la máquina |
-| Abrir el `.pdm` en PowerDesigner | **Sin verificar**: no hay PowerDesigner aquí |
+| App Flutter | **Compilada**: analyze limpio, 15 tests, APK release generado y verificado |
+| App en un Android real | **Sin probar**: no hay dispositivo ni emulador |
 
 Sobre la última fila, que es la que decide si esto sirve, se ha hecho todo lo
 demás. El `.pdm` generado se ha auditado de dos formas independientes:
@@ -396,6 +441,8 @@ cambio fue el que pasó de 8/13 a 12/13.
   sacar los detectores de contorno de OpenCV y está pendiente.
 - **Una tabla vacía no es detectable.** Si el diagrama no la dibuja, no hay
   forma de saber que existe.
+
+
 
 
 

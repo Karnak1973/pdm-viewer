@@ -7,10 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import 'models.dart';
-import 'screens/preguntas_screen.dart';
-import 'screens/revision_screen.dart';
-import 'state.dart';
+// Las rutas de un import relativo son relativas a ESTE fichero, no a la raíz
+// del proyecto: desde lib/screens/ los módulos de lib/ van con '../'.
+import '../models.dart';
+import '../state.dart';
+import 'preguntas_screen.dart';
+import 'revision_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

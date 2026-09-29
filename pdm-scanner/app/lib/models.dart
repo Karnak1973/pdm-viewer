@@ -1,4 +1,4 @@
-/// Modelos de datos que viajan entre la app y el servidor.
+﻿/// Modelos de datos que viajan entre la app y el servidor.
 ///
 /// Reflejan uno a uno el esquema Pydantic de `server/app/schema.py`. Si se
 /// toca uno, hay que tocar el otro: el contrato son los nombres JSON.
@@ -204,10 +204,15 @@ class Modelo {
   final List<Tabla> tables;
   final List<ClaveForanea> foreignKeys;
 
+  /// Busca por código o por nombre, como hace `Columna.columna`. Buscar solo
+  /// por código obligaría a que las preguntas del servidor tuvieran siempre el
+  /// código, y un nombre cambiado de sitio rompería la navegación en silencio.
   Tabla? tabla(String code) {
-    final objetivo = code.toLowerCase();
+    final objetivo = code.trim().toLowerCase();
     for (final tabla in tables) {
-      if (tabla.code.toLowerCase() == objetivo) return tabla;
+      if (tabla.code.toLowerCase() == objetivo || tabla.name.toLowerCase() == objetivo) {
+        return tabla;
+      }
     }
     return null;
   }
@@ -345,3 +350,4 @@ class EstadoServidor {
         llmDetalle: 'Sin conexión con el servidor',
       );
 }
+

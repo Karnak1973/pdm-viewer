@@ -18,11 +18,11 @@ class PdmScannerApp extends StatelessWidget {
       child: MaterialApp(
         title: 'PDM Scanner',
         debugShowCheckedModeBanner: false,
+        themeMode: ThemeMode.system,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1E5B8C)),
-          useMaterial3: true,
-          darkTheme: ThemeData.dark(useMaterial3: true),
         ),
+        darkTheme: ThemeData.dark(),
         home: const HomeScreen(),
       ),
     );

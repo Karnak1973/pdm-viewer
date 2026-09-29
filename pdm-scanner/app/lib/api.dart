@@ -5,6 +5,7 @@
 /// mensaje accionable en vez de un error de red críptico.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -45,6 +46,20 @@ class ClientePdm {
         '1. El servidor está arrancado (uvicorn app.main:app --host 0.0.0.0).\n'
         '2. El móvil y el PC están en la misma wifi.\n'
         '3. La IP es correcta: en el PC, ejecuta "ipconfig" y mira la IPv4.',
+      );
+    }
+    if (error is TimeoutException) {
+      // Cubre el caso más común de wifi floja: el servidor está ahí, pero la
+      // respuesta no llega. Antes esto caía en "error inesperado", que no le
+      // dice al usuario nada que pueda hacer.
+      throw ErrorServidor(
+        'El servidor no ha contestado a tiempo.\n\n'
+        'Suele ser una de estas tres cosas:\n'
+        '1. El móvil se ha quedado sin cobertura: el PC y el móvil deben estar\n'
+        '   en la misma wifi.\n'
+        '2. El escaneo está tardando más de lo normal. La primera vez el modelo\n'
+        '   de lenguaje se carga en memoria y puede tardar un minuto.\n'
+        '3. La red va saturada. Prueba a acercarte al router.',
       );
     }
     if (error is HttpException) {
@@ -166,7 +181,7 @@ class ClientePdm {
 
   /// Los avisos del generador vienen en una cabecera porque el .pdm tiene que
   /// ser un XML válido: no se pueden meter comentarios sueltos.
-  List<String> avisosDePdm(int modelId) async {
+  Future<List<String>> avisosDePdm(int modelId) async {
     try {
       final respuesta = await http.get(_uri('/models/$modelId/export.pdm')).timeout(
         const Duration(seconds: 60),
